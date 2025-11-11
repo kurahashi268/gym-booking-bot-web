@@ -1,0 +1,21 @@
+{
+  "name": "ritmos-bot-web",
+  "version": "1.0.0",
+  "description": "Web interface for Ritmos booking bot",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/static": "^6.12.0",
+    "@fastify/view": "^7.4.1",
+    "dotenv": "^17.2.3",
+    "ejs": "^3.1.9",
+    "fastify": "^4.24.3"
+  },
+  "packageManager": "pnpm@10.15.1+sha512.34e538c329b5553014ca8e8f4535997f96180a1d0f614339357449935350d924e22f8614682191264ec33d1462ac21561aff97f6bb18065351c162c7e8f6de67"
+}

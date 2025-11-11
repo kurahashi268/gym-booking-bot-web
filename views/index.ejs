@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ritmos Bot Controller</title>
+    <link rel="stylesheet" href="/public/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Ritmos Booking Bot Controller</h1>
+        </header>
+        <main>
+            <div class="dashboard">
+    <div class="status-card">
+        <h2>Bot Status</h2>
+        <div class="status-indicator">
+            <% if (isRunning) { %>
+                <span class="badge running">🟢 Running</span>
+            <% } else { %>
+                <span class="badge idle">⚪ Idle</span>
+            <% } %>
+        </div>
+    </div>
+
+    <div class="password-section">
+        <h2>Change Password</h2>
+        <form id="passwordForm" class="password-form">
+            <div class="form-group">
+                <label>Current Password:</label>
+                <input type="password" id="currentPassword" name="currentPassword" required>
+            </div>
+            <div class="form-group">
+                <label>New Password:</label>
+                <input type="password" id="newPassword" name="newPassword" required>
+            </div>
+            <button type="submit" class="btn btn-secondary">Update Password</button>
+        </form>
+    </div>
+
+    <div class="config-section">
+        <h2>Configuration</h2>
+        <form id="configForm" class="config-form">
+            <div class="form-group">
+                <label>Login ID:</label>
+                <input type="text" name="login.id" value="<%= config.login.id %>" required>
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="text" name="login.password" value="<%= config.login.password %>" required>
+            </div>
+            <div class="form-group">
+                <label>Reservation Time:</label>
+                <input type="datetime-local" name="reservation.time" value="<%= config.reservation.time.replace(' ', 'T').substring(0, 16) %>" required>
+            </div>
+            <div class="form-group">
+                <label>Flying Time (seconds):</label>
+                <input type="number" name="reservation.flying_time" value="<%= config.reservation.flying_time %>" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Confirm Reservation:</label>
+                <input type="checkbox" name="reservation.confirm_reservation" <%= config.reservation.confirm_reservation ? 'checked' : '' %>>
+            </div>
+            <div class="form-group">
+                <label>Store Index:</label>
+                <input type="number" name="store.selected_store_index" value="<%= config.store.selected_store_index %>" required>
+            </div>
+            <div class="form-group">
+                <label>Lesson Date Selector:</label>
+                <input type="text" name="lesson.date_selector" value="<%= config.lesson.date_selector %>" required>
+            </div>
+            <div class="form-group">
+                <label>Lesson Location Selector:</label>
+                <input type="text" name="lesson.location_selector" value="<%= config.lesson.location_selector %>" required>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+                <button type="button" class="btn btn-success" id="runBotBtn" <%= isRunning ? 'disabled' : '' %>>Run Bot</button>
+            </div>
+        </form>
+    </div>
+
+    <% if (latestResult) { %>
+    <div class="results-section">
+        <h2>Latest Execution Result</h2>
+        <div class="result-card">
+            <div class="result-header">
+                <span class="result-status <%= latestResult.success ? 'success' : 'failed' %>">
+                    <%= latestResult.success ? '✅ Success' : '❌ Failed' %>
+                </span>
+                <span class="result-time">Started: <%= new Date(latestResult.startTime).toLocaleString() %></span>
+            </div>
+            <% if (latestResult.endTime) { %>
+                <div class="result-info">
+                    <p><strong>Duration:</strong> <%= latestResult.duration %> seconds</p>
+                    <p><strong>Status:</strong> <%= latestResult.status %></p>
+                    <% if (latestResult.error) { %>
+                        <p><strong>Error:</strong> <span class="error-text"><%= latestResult.error %></span></p>
+                    <% } %>
+                </div>
+                <details class="log-details">
+                    <summary>View Logs (<%= latestResult.logs.length %> entries)</summary>
+                    <div class="logs">
+                        <% latestResult.logs.forEach(log => { %>
+                            <div class="log-entry log-<%= log.type %>">
+                                <span class="log-time"><%= new Date(log.time).toLocaleTimeString() %></span>
+                                <span class="log-message"><%= log.message %></span>
+                            </div>
+                        <% }); %>
+                    </div>
+                </details>
+            <% } else { %>
+                <div class="result-info">
+                    <p>Bot is currently running...</p>
+                    <div class="loading-spinner"></div>
+                </div>
+            <% } %>
+        </div>
+    </div>
+    <% } %>
+
+    <% if (allResults && allResults.length > 0) { %>
+    <div class="history-section">
+        <h2>Execution History</h2>
+        <div class="history-list">
+            <% allResults.forEach(result => { %>
+                <div class="history-item">
+                    <div class="history-header">
+                        <span class="history-status <%= result.success ? 'success' : 'failed' %>">
+                            <%= result.success ? '✅' : '❌' %>
+                        </span>
+                        <span class="history-time"><%= new Date(result.startTime).toLocaleString() %></span>
+                        <% if (result.duration) { %>
+                            <span class="history-duration"><%= result.duration %>s</span>
+                        <% } %>
+                    </div>
+                    <% if (result.error) { %>
+                        <div class="history-error"><%= result.error %></div>
+                    <% } %>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+    <% } %>
+            </div>
+        </main>
+        <footer>
+            <p>&copy; 2025 Ritmos Bot Controller</p>
+        </footer>
+    </div>
+    <script src="/public/app.js"></script>
+</body>
+</html>
+
