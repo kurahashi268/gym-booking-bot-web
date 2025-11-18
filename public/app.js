@@ -47,114 +47,452 @@ if (!checkAuth()) {
 const passwordForm = document.getElementById('passwordForm');
 if (passwordForm) {
     passwordForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!checkAuth()) return;
-    
-    const currentPassword = document.getElementById('currentPassword').value;
-    const newPassword = document.getElementById('newPassword').value;
-    
-    try {
-        const response = await fetch('/api/update-password', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ currentPassword, newPassword })
-        });
+        e.preventDefault();
         
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Password updated successfully!', 'success');
-            // Update stored token
-            localStorage.setItem('authToken', result.token);
-            // Update URL with new token
-            const url = new URL(window.location);
-            url.searchParams.set('token', result.token);
-            window.history.replaceState({}, '', url);
-            // Clear form
-            document.getElementById('passwordForm').reset();
-        } else {
-            showNotification('Error updating password: ' + result.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
-    }
-    });
-}
-
-// Configuration form handler
-const configForm = document.getElementById('configForm');
-if (configForm) {
-    configForm.addEventListener('submit', async (e) => {
-    if (!checkAuth()) return;
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const config = {
-        login: {
-            id: formData.get('login.id'),
-            password: formData.get('login.password')
-        },
-        reservation: {
-            time: formData.get('reservation.time').replace('T', ' '),
-            flying_time: parseFloat(formData.get('reservation.flying_time')),
-            confirm_reservation: formData.get('reservation.confirm_reservation') === 'on'
-        },
-        store: {
-            selected_store_index: parseInt(formData.get('store.selected_store_index'))
-        },
-        lesson: {
-            date_selector: formData.get('lesson.date_selector'),
-            location_selector: formData.get('lesson.location_selector')
-        }
-    };
-    
-    try {
-        const response = await fetch('/api/config', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(config)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Configuration saved successfully!', 'success');
-        } else {
-            showNotification('Error saving configuration: ' + result.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
-    }
-    });
-}
-
-// Run bot button handler
-const runBotBtn = document.getElementById('runBotBtn');
-if (runBotBtn) {
-    runBotBtn.addEventListener('click', async () => {
         if (!checkAuth()) return;
         
-        if (confirm('Are you sure you want to run the bot?')) {
+        const oldPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        
+        try {
+            const response = await fetch('/api/update-password', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ oldPassword, newPassword })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('Password updated successfully!', 'success');
+                // Clear form
+                document.getElementById('passwordForm').reset();
+            } else {
+                showNotification('Error updating password: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showNotification('Error: ' + error.message, 'error');
+        }
+    });
+}
+
+// Profile details toggle function
+function toggleProfileDetails(profileName) {
+    const detailsRow = document.getElementById(`details-${profileName}`);
+    const expandBtn = document.querySelector(`.profile-expand-btn[data-profile="${profileName}"]`);
+    
+    if (detailsRow.classList.contains('expanded')) {
+        detailsRow.classList.remove('expanded');
+        expandBtn?.classList.remove('expanded');
+    } else {
+        // Close all other expanded rows
+        document.querySelectorAll('.profile-details-row.expanded').forEach(row => {
+            row.classList.remove('expanded');
+            const btn = document.querySelector(`.profile-expand-btn[data-profile="${row.getAttribute('data-profile')}"]`);
+            if (btn) {
+                btn.classList.remove('expanded');
+            }
+        });
+        
+        detailsRow.classList.add('expanded');
+        expandBtn?.classList.add('expanded');
+    }
+}
+
+// Generate selector string from number inputs
+function generateSelectorString(selectorType, profileName) {
+    if (selectorType === 'date') {
+        const rowInput = document.querySelector(
+            `.selector-number-input[data-selector-type="date"][data-selector-index="0"][data-profile="${profileName}"]`
+        );
+        const colInput = document.querySelector(
+            `.selector-number-input[data-selector-type="date"][data-selector-index="1"][data-profile="${profileName}"]`
+        );
+        if (rowInput && colInput) {
+            const rowIndex = parseInt(rowInput.value) || 3;
+            const colIndex = parseInt(colInput.value) || 15;
+            return `#listcontainer${rowIndex} > td:nth-child(${colIndex}) > a > p.lesson_name`;
+        }
+    } else if (selectorType === 'location') {
+        const rowInput = document.querySelector(
+            `.selector-number-input[data-selector-type="location"][data-selector-index="0"][data-profile="${profileName}"]`
+        );
+        const colInput = document.querySelector(
+            `.selector-number-input[data-selector-type="location"][data-selector-index="1"][data-profile="${profileName}"]`
+        );
+        if (rowInput && colInput) {
+            const rowIndex = parseInt(rowInput.value) || 3;
+            const colIndex = parseInt(colInput.value) || 6;
+            return `#main > div.overflow-wrap > div > fieldset > fieldset > div > table > tbody > tr:nth-child(${rowIndex}) > td:nth-child(${colIndex}) > div > label`;
+        }
+    }
+    return '';
+}
+
+// Update selector string display when number inputs change
+function updateSelectorString(selectorType, profileName) {
+    const selectorString = generateSelectorString(selectorType, profileName);
+    const displayInput = document.querySelector(
+        `.selector-string-display[data-selector-type="${selectorType}"][data-profile="${profileName}"]`
+    );
+    if (displayInput) {
+        displayInput.value = selectorString;
+    }
+}
+
+// Initialize selector input handlers using event delegation
+function initializeSelectorInputs() {
+    // Use event delegation to handle all selector number inputs
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('selector-number-input')) {
+            const selectorType = e.target.getAttribute('data-selector-type');
+            const profileName = e.target.getAttribute('data-profile');
+            updateSelectorString(selectorType, profileName);
+        }
+    });
+    
+    document.addEventListener('change', (e) => {
+        if (e.target.classList.contains('selector-number-input')) {
+            const selectorType = e.target.getAttribute('data-selector-type');
+            const profileName = e.target.getAttribute('data-profile');
+            updateSelectorString(selectorType, profileName);
+        }
+    });
+}
+
+// Profile form handler
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.profile-form').forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!checkAuth()) return;
+            
+            const profileName = form.getAttribute('data-profile');
+            const formData = new FormData(e.target);
+            const config = {
+                login: {
+                    id: formData.get('login.id'),
+                    password: formData.get('login.password')
+                },
+                reservation: {
+                    time: formData.get('reservation.time').replace('T', ' '),
+                    flying_time: parseFloat(formData.get('reservation.flying_time')),
+                    confirm_reservation: formData.get('reservation.confirm_reservation') === 'on'
+                },
+                store: {
+                    selected_store_index: parseInt(formData.get('store.selected_store_index'))
+                },
+                lesson: {
+                    date_selector: {
+                        row: parseInt(formData.get('lesson.date_selector.row')) || 3,
+                        col: parseInt(formData.get('lesson.date_selector.col')) || 15,
+                        selector: formData.get('lesson.date_selector.selector')
+                    },
+                    location_selector: {
+                        row: parseInt(formData.get('lesson.location_selector.row')) || 3,
+                        col: parseInt(formData.get('lesson.location_selector.col')) || 6,
+                        selector: formData.get('lesson.location_selector.selector')
+                    }
+                }
+            };
+            
             try {
-                const response = await fetch('/api/run', {
+                const response = await fetch(`/api/profiles/${profileName}`, {
                     method: 'POST',
-                    headers: getAuthHeaders()
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(config)
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
-                    showNotification('Bot started!', 'success');
-                    // Disable button and start polling
-                    document.getElementById('runBotBtn').disabled = true;
-                    startStatusPolling();
+                    showNotification('Profile saved successfully!', 'success');
+                    // Reload page after a short delay to show updated status
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 } else {
-                    showNotification('Error starting bot: ' + result.error, 'error');
+                    showNotification('Error saving profile: ' + result.error, 'error');
                 }
             } catch (error) {
                 showNotification('Error: ' + error.message, 'error');
             }
+        });
+    });
+});
+
+// Delete profile function
+async function deleteProfile(profileName) {
+    if (!checkAuth()) return;
+    
+    if (!confirm(`Are you sure you want to delete profile "${profileName}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/profiles/${profileName}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Profile deleted successfully!', 'success');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showNotification('Error deleting profile: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+    }
+}
+
+// Add profile modal
+const addProfileBtn = document.getElementById('addProfileBtn');
+const addProfileModal = document.getElementById('addProfileModal');
+const addProfileForm = document.getElementById('addProfileForm');
+
+if (addProfileBtn) {
+    addProfileBtn.addEventListener('click', () => {
+        if (addProfileModal) {
+            addProfileModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            // Initialize selector strings for new profile
+            setTimeout(() => {
+                updateSelectorString('date', 'new');
+                updateSelectorString('location', 'new');
+            }, 100);
+        }
+    });
+}
+
+function closeAddProfileModal() {
+    if (addProfileModal) {
+        document.body.style.overflow = 'auto';
+        addProfileModal.style.display = 'none';
+        if (addProfileForm) {
+            addProfileForm.reset();
+        }
+    }
+}
+
+if (addProfileForm) {
+    addProfileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!checkAuth()) return;
+        
+        const profileName = document.getElementById('newProfileName').value.trim();
+        if (!profileName) {
+            showNotification('Profile name is required', 'error');
+            return;
+        }
+        
+        const formData = new FormData(e.target);
+        const config = {
+            login: {
+                id: formData.get('login.id'),
+                password: formData.get('login.password')
+            },
+            reservation: {
+                time: formData.get('reservation.time').replace('T', ' '),
+                flying_time: parseFloat(formData.get('reservation.flying_time')),
+                confirm_reservation: formData.get('reservation.confirm_reservation') === 'on'
+            },
+            store: {
+                selected_store_index: parseInt(formData.get('store.selected_store_index'))
+            },
+            lesson: {
+                date_selector: {
+                    row: parseInt(formData.get('lesson.date_selector.row')) || 3,
+                    col: parseInt(formData.get('lesson.date_selector.col')) || 15,
+                    selector: formData.get('lesson.date_selector.selector')
+                },
+                location_selector: {
+                    row: parseInt(formData.get('lesson.location_selector.row')) || 3,
+                    col: parseInt(formData.get('lesson.location_selector.col')) || 6,
+                    selector: formData.get('lesson.location_selector.selector')
+                }
+            }
+        };
+        
+        try {
+            const response = await fetch(`/api/profiles/${profileName}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(config)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('Profile created successfully!', 'success');
+                closeAddProfileModal();
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showNotification('Error creating profile: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showNotification('Error: ' + error.message, 'error');
+        }
+    });
+}
+
+// Close modal when clicking outside
+if (addProfileModal) {
+    addProfileModal.addEventListener('click', (e) => {
+        if (e.target === addProfileModal) {
+            closeAddProfileModal();
+        }
+    });
+}
+
+// Toggle select all checkboxes
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const profileCheckboxes = document.querySelectorAll('.profile-checkbox');
+    
+    profileCheckboxes.forEach(checkbox => {
+        // Only toggle if profile is not running
+        const profileName = checkbox.value;
+        const row = document.querySelector(`tr[data-profile="${profileName}"]`);
+        const isRunning = row?.querySelector('.profile-status-badge.status-running');
+        if (!isRunning) {
+            checkbox.checked = selectAllCheckbox.checked;
+        }
+    });
+    
+    updateRunButtonState();
+}
+
+// Update run button state based on selection
+function updateRunButtonState() {
+    const runSelectedBtn = document.getElementById('runSelectedBtn');
+    const selectedCheckboxes = document.querySelectorAll('.profile-checkbox:checked');
+    
+    if (runSelectedBtn) {
+        if (selectedCheckboxes.length > 0) {
+            runSelectedBtn.disabled = false;
+            runSelectedBtn.textContent = `▶ Run Selected (${selectedCheckboxes.length})`;
+        } else {
+            runSelectedBtn.disabled = true;
+            runSelectedBtn.textContent = '▶ Run Selected Bots';
+        }
+    }
+    
+    // Update select all checkbox state
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const allCheckboxes = document.querySelectorAll('.profile-checkbox');
+    const checkedCount = document.querySelectorAll('.profile-checkbox:checked').length;
+    
+    if (selectAllCheckbox && allCheckboxes.length > 0) {
+        selectAllCheckbox.checked = checkedCount === allCheckboxes.length;
+        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+    }
+}
+
+// Disable checkboxes for running profiles
+function updateCheckboxStates() {
+    document.querySelectorAll('.profile-checkbox').forEach(checkbox => {
+        const profileName = checkbox.value;
+        const row = document.querySelector(`tr[data-profile="${profileName}"]`);
+        const isRunning = row?.querySelector('.profile-status-badge.status-running');
+        
+        if (isRunning) {
+            checkbox.disabled = true;
+            checkbox.checked = false;
+        } else {
+            checkbox.disabled = false;
+        }
+    });
+    updateRunButtonState();
+}
+
+// Run selected bots button
+const runSelectedBtn = document.getElementById('runSelectedBtn');
+if (runSelectedBtn) {
+    runSelectedBtn.addEventListener('click', async () => {
+        if (!checkAuth()) return;
+        
+        const selectedCheckboxes = document.querySelectorAll('.profile-checkbox:checked');
+        const selectedProfiles = Array.from(selectedCheckboxes).map(cb => cb.value);
+        
+        if (selectedProfiles.length === 0) {
+            showNotification('Please select at least one profile', 'error');
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to run ${selectedProfiles.length} selected bot(s)?`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/run-selected', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ profiles: selectedProfiles })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification(`Started ${result.profiles.length} bot(s)!`, 'success');
+                // Disable buttons and start polling
+                runSelectedBtn.disabled = true;
+                const runAllBtn = document.getElementById('runAllBtn');
+                if (runAllBtn) runAllBtn.disabled = true;
+                // Uncheck all checkboxes
+                selectedCheckboxes.forEach(cb => cb.checked = false);
+                updateRunButtonState();
+                startStatusPolling();
+            } else {
+                showNotification('Error starting bots: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showNotification('Error: ' + error.message, 'error');
+        }
+    });
+    
+    // Initially disable the button
+    runSelectedBtn.disabled = true;
+}
+
+// Run all bots button
+const runAllBtn = document.getElementById('runAllBtn');
+if (runAllBtn) {
+    runAllBtn.addEventListener('click', async () => {
+        if (!checkAuth()) return;
+        
+        if (!confirm('Are you sure you want to run all bots?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/run-all', {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification(`Started ${result.profiles.length} bot(s)!`, 'success');
+                // Disable buttons and start polling
+                runAllBtn.disabled = true;
+                if (runSelectedBtn) runSelectedBtn.disabled = true;
+                // Uncheck all checkboxes
+                document.querySelectorAll('.profile-checkbox').forEach(cb => cb.checked = false);
+                updateRunButtonState();
+                startStatusPolling();
+            } else {
+                showNotification('Error starting bots: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showNotification('Error: ' + error.message, 'error');
         }
     });
 }
@@ -167,20 +505,27 @@ function startStatusPolling() {
     
     statusPollInterval = setInterval(async () => {
         try {
-            const response = await fetch('/api/status', {
+            const response = await fetch('/api/profiles/status', {
                 headers: getAuthHeaders()
             });
             const data = await response.json();
             
-            // Update UI based on status
-            if (!data.isRunning && statusPollInterval) {
-                clearInterval(statusPollInterval);
-                statusPollInterval = null;
-                document.getElementById('runBotBtn').disabled = false;
-                // Reload page to show updated results
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+            if (data.success) {
+                // Update UI with latest status
+                updateProfileStatuses(data.profiles);
+                
+                // Check if all bots are done
+                const allDone = data.profiles.every(p => p.status.status !== 'running');
+                if (allDone && statusPollInterval) {
+                    clearInterval(statusPollInterval);
+                    statusPollInterval = null;
+                    if (runAllBtn) {
+                        runAllBtn.disabled = false;
+                    }
+                    if (runSelectedBtn) {
+                        runSelectedBtn.disabled = false;
+                    }
+                }
             }
         } catch (error) {
             console.error('Error polling status:', error);
@@ -188,15 +533,90 @@ function startStatusPolling() {
     }, 2000); // Poll every 2 seconds
 }
 
-// Auto-start polling if bot is running
-if (document.querySelector('.status-indicator .badge.running')) {
-    startStatusPolling();
+function updateProfileStatuses(profiles) {
+    profiles.forEach(profile => {
+        const row = document.querySelector(`tr[data-profile="${profile.name}"]`);
+        if (row) {
+            const badge = row.querySelector('.profile-status-badge');
+            if (badge) {
+                // Remove all status classes
+                badge.className = 'profile-status-badge';
+                badge.classList.add(`status-${profile.status.status || 'inactive'}`);
+                
+                // Update badge text
+                if (profile.status.status === 'running') {
+                    badge.textContent = '🟢 Running';
+                } else if (profile.status.status === 'success') {
+                    badge.textContent = '✅ Success';
+                } else if (profile.status.status === 'failure') {
+                    badge.textContent = '❌ Failed';
+                } else {
+                    badge.textContent = '⚪ Inactive';
+                }
+            }
+            
+            // Update status info if details row is expanded
+            const detailsRow = document.getElementById(`details-${profile.name}`);
+            if (detailsRow && detailsRow.classList.contains('expanded')) {
+                updateProfileStatusInfo(profile);
+            }
+        }
+    });
+    
+    // Update checkbox states after status update
+    updateCheckboxStates();
 }
 
-// Only run status polling initialization if we're on the main page
-if (configForm || runBotBtn) {
-    // We're on the main page, initialize status polling
+function updateProfileStatusInfo(profile) {
+    const detailsRow = document.getElementById(`details-${profile.name}`);
+    if (!detailsRow) return;
+    
+    const statusInfo = detailsRow.querySelector('.profile-status-info');
+    if (!statusInfo) return;
+    
+    let html = '';
+    if (profile.status.status === 'running') {
+        html = `<p><strong>Status:</strong> Running since ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A'}</p>`;
+    } else if (profile.status.status === 'success') {
+        html = `
+            <p><strong>Status:</strong> Success</p>
+            <p><strong>Completed:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A'}</p>
+            <p><strong>Elapsed Time:</strong> ${profile.status.elapsed || 'N/A'}</p>
+        `;
+    } else if (profile.status.status === 'failure') {
+        html = `
+            <p><strong>Status:</strong> Failed</p>
+            <p><strong>Failed:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A'}</p>
+            <p><strong>Elapsed Time:</strong> ${profile.status.elapsed || 'N/A'}</p>
+            ${profile.status.message ? `<p><strong>Error:</strong> <span class="error-text">${profile.status.message}</span></p>` : ''}
+        `;
+    } else {
+        html = `<p><strong>Status:</strong> Inactive</p>`;
+    }
+    
+    statusInfo.innerHTML = html;
 }
+
+// Auto-start polling if any bot is running
+document.addEventListener('DOMContentLoaded', () => {
+    const runningProfiles = document.querySelectorAll('.profile-status-badge.status-running');
+    if (runningProfiles.length > 0) {
+        startStatusPolling();
+    }
+    
+    // Initialize checkbox states
+    updateCheckboxStates();
+    
+    // Initialize selector inputs
+    initializeSelectorInputs();
+    
+    // Make functions available globally
+    window.toggleSelectAll = toggleSelectAll;
+    window.updateRunButtonState = updateRunButtonState;
+});
+
+// Make toggleProfileDetails available globally
+window.toggleProfileDetails = toggleProfileDetails;
 
 // Notification system
 function showNotification(message, type = 'info') {
@@ -330,4 +750,3 @@ if (!document.getElementById('notification-animations')) {
     style.id = 'notification-animations';
     document.head.appendChild(style);
 }
-

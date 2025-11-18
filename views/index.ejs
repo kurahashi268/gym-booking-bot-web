@@ -13,143 +13,304 @@
         </header>
         <main>
             <div class="dashboard">
-    <div class="status-card">
-        <h2>Bot Status</h2>
-        <div class="status-indicator">
-            <% if (isRunning) { %>
-                <span class="badge running">🟢 Running</span>
-            <% } else { %>
-                <span class="badge idle">⚪ Idle</span>
-            <% } %>
-        </div>
-    </div>
+                <div class="password-section">
+                    <h2>Change Password</h2>
+                    <form id="passwordForm" class="password-form">
+                        <div class="form-group">
+                            <label>Current Password:</label>
+                            <input type="password" id="currentPassword" name="currentPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label>New Password:</label>
+                            <input type="password" id="newPassword" name="newPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-secondary">Update Password</button>
+                    </form>
+                </div>
 
-    <div class="password-section">
-        <h2>Change Password</h2>
-        <form id="passwordForm" class="password-form">
-            <div class="form-group">
-                <label>Current Password:</label>
-                <input type="password" id="currentPassword" name="currentPassword" required>
-            </div>
-            <div class="form-group">
-                <label>New Password:</label>
-                <input type="password" id="newPassword" name="newPassword" required>
-            </div>
-            <button type="submit" class="btn btn-secondary">Update Password</button>
-        </form>
-    </div>
-
-    <div class="config-section">
-        <h2>Configuration</h2>
-        <form id="configForm" class="config-form">
-            <div class="form-group">
-                <label>Login ID:</label>
-                <input type="text" name="login.id" value="<%= config.login.id %>" required>
-            </div>
-            <div class="form-group">
-                <label>Password:</label>
-                <input type="text" name="login.password" value="<%= config.login.password %>" required>
-            </div>
-            <div class="form-group">
-                <label>Reservation Time:</label>
-                <input type="datetime-local" name="reservation.time" value="<%= config.reservation.time.replace(' ', 'T').substring(0, 16) %>" required>
-            </div>
-            <div class="form-group">
-                <label>Flying Time (seconds):</label>
-                <input type="number" name="reservation.flying_time" value="<%= config.reservation.flying_time %>" step="0.01" required>
-            </div>
-            <div class="form-group">
-                <label>Confirm Reservation:</label>
-                <input type="checkbox" name="reservation.confirm_reservation" <%= config.reservation.confirm_reservation ? 'checked' : '' %>>
-            </div>
-            <div class="form-group">
-                <label>Store Index:</label>
-                <input type="number" name="store.selected_store_index" value="<%= config.store.selected_store_index %>" required>
-            </div>
-            <div class="form-group">
-                <label>Lesson Date Selector:</label>
-                <input type="text" name="lesson.date_selector" value="<%= config.lesson.date_selector %>" required>
-            </div>
-            <div class="form-group">
-                <label>Lesson Location Selector:</label>
-                <input type="text" name="lesson.location_selector" value="<%= config.lesson.location_selector %>" required>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Save Configuration</button>
-                <button type="button" class="btn btn-success" id="runBotBtn" <%= isRunning ? 'disabled' : '' %>>Run Bot</button>
-            </div>
-        </form>
-    </div>
-
-    <% if (latestResult) { %>
-    <div class="results-section">
-        <h2>Latest Execution Result</h2>
-        <div class="result-card">
-            <div class="result-header">
-                <span class="result-status <%= latestResult.success ? 'success' : 'failed' %>">
-                    <%= latestResult.success ? '✅ Success' : '❌ Failed' %>
-                </span>
-                <span class="result-time">Started: <%= new Date(latestResult.startTime).toLocaleString() %></span>
-            </div>
-            <% if (latestResult.endTime) { %>
-                <div class="result-info">
-                    <p><strong>Duration:</strong> <%= latestResult.duration %> seconds</p>
-                    <p><strong>Status:</strong> <%= latestResult.status %></p>
-                    <% if (latestResult.error) { %>
-                        <p><strong>Error:</strong> <span class="error-text"><%= latestResult.error %></span></p>
+                <div class="profiles-section">
+                    <div class="profiles-header">
+                        <h2>Profiles</h2>
+                        <div style="display: flex; gap: 12px;">
+                            <button id="addProfileBtn" class="btn btn-primary">+ Add Profile</button>
+                            <button id="runSelectedBtn" class="btn btn-success">▶ Run Selected Bots</button>
+                            <button id="runAllBtn" class="btn btn-success" style="opacity: 0.7;">▶ Run All Bots</button>
+                        </div>
+                    </div>
+                    
+                    <% if (profiles && profiles.length > 0) { %>
+                        <table class="profiles-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                                    </th>
+                                    <th>Profile Name</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% profiles.forEach((profile, index) => { %>
+                                    <tr data-profile="<%= profile.name %>">
+                                        <td class="profile-checkbox-cell">
+                                            <input type="checkbox" class="profile-checkbox" value="<%= profile.name %>" onchange="updateRunButtonState()">
+                                        </td>
+                                        <td class="profile-name-cell"><%= profile.name %></td>
+                                        <td class="profile-status-cell">
+                                            <span class="profile-status-badge status-<%= profile.status.status || 'inactive' %>">
+                                                <% if (profile.status.status === 'running') { %>
+                                                    🟢 Running
+                                                <% } else if (profile.status.status === 'success') { %>
+                                                    ✅ Success
+                                                <% } else if (profile.status.status === 'failure') { %>
+                                                    ❌ Failed
+                                                <% } else { %>
+                                                    ⚪ Inactive
+                                                <% } %>
+                                            </span>
+                                        </td>
+                                        <td class="profile-actions-cell">
+                                            <button class="profile-expand-btn" onclick="toggleProfileDetails('<%= profile.name %>')" data-profile="<%= profile.name %>">
+                                                <span class="expand-icon">▼</span>
+                                                <span>Details</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr class="profile-details-row" id="details-<%= profile.name %>" data-profile="<%= profile.name %>">
+                                        <td colspan="4" class="profile-details-cell">
+                                            <div class="profile-details-content">
+                                                <div class="profile-status-info">
+                                                    <% if (profile.status.status === 'running') { %>
+                                                        <p><strong>Status:</strong> Running since <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A' %></p>
+                                                    <% } else if (profile.status.status === 'success') { %>
+                                                        <p><strong>Status:</strong> Success</p>
+                                                        <p><strong>Completed:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A' %></p>
+                                                        <p><strong>Elapsed Time:</strong> <%= profile.status.elapsed || 'N/A' %></p>
+                                                    <% } else if (profile.status.status === 'failure') { %>
+                                                        <p><strong>Status:</strong> Failed</p>
+                                                        <p><strong>Failed:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A' %></p>
+                                                        <p><strong>Elapsed Time:</strong> <%= profile.status.elapsed || 'N/A' %></p>
+                                                        <% if (profile.status.message) { %>
+                                                            <p><strong>Error:</strong> <span class="error-text"><%= profile.status.message %></span></p>
+                                                        <% } %>
+                                                    <% } else { %>
+                                                        <p><strong>Status:</strong> Inactive</p>
+                                                    <% } %>
+                                                </div>
+                                                
+                                                <form class="profile-form" data-profile="<%= profile.name %>">
+                                                    <div class="form-group">
+                                                        <label>Login ID:</label>
+                                                        <input type="text" name="login.id" value="<%= profile.config.login.id %>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Password:</label>
+                                                        <input type="text" name="login.password" value="<%= profile.config.login.password %>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Reservation Time:</label>
+                                                        <input type="datetime-local" name="reservation.time" value="<%= profile.config.reservation.time.replace(' ', 'T').substring(0, 16) %>" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Flying Time (seconds):</label>
+                                                        <input type="number" name="reservation.flying_time" value="<%= profile.config.reservation.flying_time %>" step="0.01" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Confirm Reservation:</label>
+                                                        <input type="checkbox" name="reservation.confirm_reservation" <%= profile.config.reservation.confirm_reservation ? 'checked' : '' %>>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Store Index:</label>
+                                                        <input type="number" name="store.selected_store_index" value="<%= profile.config.store.selected_store_index %>" required>
+                                                    </div>
+                                                <div class="form-group">
+                                                    <label>Lesson Date Selector:</label>
+                                                    <div class="selector-input-group">
+                                                        <div class="selector-numbers">
+                                                            <label class="selector-number-label">Date Row:</label>
+                                                            <input type="number" class="selector-number-input" 
+                                                                   name="lesson.date_selector.row"
+                                                                   data-selector-type="date" 
+                                                                   data-selector-index="0" 
+                                                                   data-profile="<%= profile.name %>"
+                                                                   value="<%= profile.config.lesson.date_selector.row || 3 %>" 
+                                                                   min="1" required>
+                                                            <label class="selector-number-label">Date Col:</label>
+                                                            <input type="number" class="selector-number-input" 
+                                                                    name="lesson.date_selector.col"
+                                                                    data-selector-type="date" 
+                                                                    data-selector-index="1" 
+                                                                    data-profile="<%= profile.name %>"
+                                                                    value="<%= profile.config.lesson.date_selector.col || 15 %>" 
+                                                                    min="1" required>
+                                                        </div>
+                                                        <input type="text" class="selector-string-display" 
+                                                            name="lesson.date_selector.selector"
+                                                               data-selector-type="date"
+                                                               data-profile="<%= profile.name %>"
+                                                               value="<%= profile.config.lesson.date_selector.selector %>" 
+                                                               readonly>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Lesson Location Selector:</label>
+                                                    <div class="selector-input-group">
+                                                        <div class="selector-numbers">
+                                                            <label class="selector-number-label">Row Index:</label>
+                                                            <input type="number" class="selector-number-input" 
+                                                                   name="lesson.location_selector.row" 
+                                                                   data-selector-type="location" 
+                                                                   data-selector-index="0"
+                                                                   data-profile="<%= profile.name %>"
+                                                                   value="<%= profile.config.lesson.location_selector.row || 3 %>" 
+                                                                   min="1" required>
+                                                            <label class="selector-number-label">Column Index:</label>
+                                                            <input type="number" class="selector-number-input" 
+                                                                   name="lesson.location_selector.col" 
+                                                                   data-selector-type="location" 
+                                                                   data-selector-index="1"
+                                                                   data-profile="<%= profile.name %>"
+                                                                   value="<%= profile.config.lesson.location_selector.col || 6 %>" 
+                                                                   min="1" required>
+                                                        </div>
+                                                        <input type="text" class="selector-string-display" 
+                                                                name="lesson.location_selector.selector"
+                                                               data-selector-type="location"
+                                                               data-profile="<%= profile.name %>"
+                                                               value="<%= profile.config.lesson.location_selector.selector %>" 
+                                                               readonly>
+                                                    </div>
+                                                </div>
+                                                    <div class="form-actions">
+                                                        <button type="submit" class="btn btn-primary">Save Profile</button>
+                                                        <button type="button" class="btn btn-danger" onclick="deleteProfile('<%= profile.name %>')">Delete Profile</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    <% } else { %>
+                        <div class="no-profiles">
+                            <p>No profiles found. Click "Add Profile" to create one.</p>
+                        </div>
                     <% } %>
                 </div>
-                <details class="log-details">
-                    <summary>View Logs (<%= latestResult.logs.length %> entries)</summary>
-                    <div class="logs">
-                        <% latestResult.logs.forEach(log => { %>
-                            <div class="log-entry log-<%= log.type %>">
-                                <span class="log-time"><%= new Date(log.time).toLocaleTimeString() %></span>
-                                <span class="log-message"><%= log.message %></span>
-                            </div>
-                        <% }); %>
-                    </div>
-                </details>
-            <% } else { %>
-                <div class="result-info">
-                    <p>Bot is currently running...</p>
-                    <div class="loading-spinner"></div>
-                </div>
-            <% } %>
-        </div>
-    </div>
-    <% } %>
-
-    <% if (allResults && allResults.length > 0) { %>
-    <div class="history-section">
-        <h2>Execution History</h2>
-        <div class="history-list">
-            <% allResults.forEach(result => { %>
-                <div class="history-item">
-                    <div class="history-header">
-                        <span class="history-status <%= result.success ? 'success' : 'failed' %>">
-                            <%= result.success ? '✅' : '❌' %>
-                        </span>
-                        <span class="history-time"><%= new Date(result.startTime).toLocaleString() %></span>
-                        <% if (result.duration) { %>
-                            <span class="history-duration"><%= result.duration %>s</span>
-                        <% } %>
-                    </div>
-                    <% if (result.error) { %>
-                        <div class="history-error"><%= result.error %></div>
-                    <% } %>
-                </div>
-            <% }); %>
-        </div>
-    </div>
-    <% } %>
             </div>
         </main>
         <footer>
             <p>&copy; 2025 Ritmos Bot Controller</p>
         </footer>
     </div>
+
+    <!-- Add Profile Modal -->
+    <div id="addProfileModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Profile</h2>
+                <button class="modal-close" onclick="closeAddProfileModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="addProfileForm">
+                    <div class="form-group">
+                        <label>Profile Name:</label>
+                        <input type="text" id="newProfileName" name="profileName" required pattern="[a-zA-Z0-9_-]+" title="Use only letters, numbers, underscores, and hyphens">
+                        <small>Profile name will be used as the config file name (e.g., hiromi.json)</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Login ID:</label>
+                        <input type="text" name="login.id" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password:</label>
+                        <input type="text" name="login.password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Reservation Time:</label>
+                        <input type="datetime-local" name="reservation.time" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Flying Time (seconds):</label>
+                        <input type="number" name="reservation.flying_time" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Reservation:</label>
+                        <input type="checkbox" name="reservation.confirm_reservation">
+                    </div>
+                    <div class="form-group">
+                        <label>Store Index:</label>
+                        <input type="number" name="store.selected_store_index" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Lesson Date Selector:</label>
+                        <div class="selector-input-group">
+                            <div class="selector-numbers">
+                                <label class="selector-number-label">Row Index:</label>
+                                <input type="number" class="selector-number-input" 
+                                       name="lesson.date_selector.row" 
+                                       data-selector-type="date" 
+                                       data-selector-index="0"
+                                       data-profile="new"
+                                       value="3" 
+                                       min="1" required>
+                                <label class="selector-number-label">Column Index:</label>
+                                <input type="number" class="selector-number-input" 
+                                       name="lesson.date_selector.col" 
+                                       data-selector-type="date" 
+                                       data-selector-index="1"
+                                       data-profile="new"
+                                       value="15" 
+                                       min="1" required>
+                            </div>
+                            <input type="text" class="selector-string-display" 
+                                   name="lesson.date_selector.selector" 
+                                   data-selector-type="date"
+                                   data-profile="new"
+                                   value="#listcontainer3 > td:nth-child(15) > a > p.lesson_name" 
+                                   readonly>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Lesson Location Selector:</label>
+                        <div class="selector-input-group">
+                            <div class="selector-numbers">
+                                <label class="selector-number-label">Row Index:</label>
+                                <input type="number" class="selector-number-input" 
+                                       name="lesson.location_selector.row" 
+                                       data-selector-type="location" 
+                                       data-selector-index="0"
+                                       data-profile="new"
+                                       value="3" 
+                                       min="1" required>
+                                <label class="selector-number-label">Column Index:</label>
+                                <input type="number" class="selector-number-input" 
+                                       name="lesson.location_selector.col" 
+                                       data-selector-type="location" 
+                                       data-selector-index="1"
+                                       data-profile="new"
+                                       value="6" 
+                                       min="1" required>
+                            </div>
+                            <input type="text" class="selector-string-display" 
+                                   name="lesson.location_selector.selector" 
+                                   data-selector-type="location"
+                                   data-profile="new"
+                                   value="#main > div.overflow-wrap > div > fieldset > fieldset > div > table > tbody > tr:nth-child(3) > td:nth-child(6) > div > label" 
+                                   readonly>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create Profile</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeAddProfileModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="/public/app.js"></script>
 </body>
 </html>
-

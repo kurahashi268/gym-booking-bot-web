@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 .env
 
+status/
+profiles/*
+!profiles/hiromi.json
+logs/

@@ -1,401 +1,642 @@
-// Load environment variables
-require('dotenv').config();
+import process from 'node:process';
+import Fastify from 'fastify';
+import FastifyStatic from '@fastify/static';
+import FastifyView from '@fastify/view';
+import ejs from 'ejs';
+import path from 'path';
+import fs from 'fs/promises';
+import crypto from 'crypto';
+import Piscina from 'piscina';
+import dotenv from 'dotenv';
 
-const fastify = require('fastify')({ logger: true });
-const path = require('path');
-const fs = require('fs').promises;
-const { spawn } = require('child_process');
+//
+const CWD = process.cwd();
+
+// Load environment variables
+dotenv.config();
+const HOST          =   process.env.HOST || 'localhost';
+const PORT          =   process.env.PORT || 3000;
+const NODE_ENV      =   process.env.NODE_ENV || 'development';
+const AUTH_SALT     =   process.env.AUTH_SALT || 'default_salt';
+const AUTH_PATH     =   path.join(CWD, process.env.AUTH_PATH || 'auth.json');
+const BOT_DIR       =   path.join(CWD, process.env.BOT_DIR || 'bot');
+const BOT_ESTIMATED_ELAPSED_SECONDS = parseInt(process.env.BOT_ESTIMATED_ELAPSED_SECONDS) || 10;
+const MAX_PROFILE   =   parseInt(process.env.MAX_PROFILE) || 10;
+
+const PROFILES_DIR  =   path.join(CWD, 'profiles');
+const STATUS_DIR    =   path.join(CWD, 'status');
+
+// ====================================================================================
+// [Fastify Setup]
+
+// Fastify instance
+const fastify = Fastify({logger: NODE_ENV === 'development'});
 
 // Register static files
-fastify.register(require('@fastify/static'), {
-  root: path.join(__dirname, 'public'),
-  prefix: '/public/'
+fastify.register(FastifyStatic, {
+  root: path.join(CWD, 'public'),
+  prefix: '/public/',
 });
 
-// Register EJS view engine
-fastify.register(require('@fastify/view'), {
+// Register view engine
+fastify.register(FastifyView, {
   engine: {
-    ejs: require('ejs')
+    ejs: ejs,
   },
-  root: path.join(__dirname, 'views')
+  root: path.join(CWD, 'views')
 });
 
-// Bot execution state
-const botState = {
-  isRunning: false,
-  lastRun: null,
-  results: []
-};
+// Routes
+fastify.get('/', route_homePage);
+// ------------------------------------------------------------------
+fastify.get('/login', route_loginPage);
+fastify.post('/api/login', route_attemptLogin);
+fastify.post('/api/update-password', route_updatePassword);
+// ------------------------------------------------------------------
+fastify.get('/api/profiles', route_listProfiles);
+fastify.get('/api/profiles/:profileName', route_getProfile);
+fastify.post('/api/profiles/:profileName', route_updateProfile);
+fastify.delete('/api/profiles/:profileName', route_deleteProfile);
+// ------------------------------------------------------------------
+fastify.post('/api/run-selected', route_runSelected);
+fastify.post('/api/run-all', route_runAll);
+// ------------------------------------------------------------------
+fastify.get('/api/profiles/status', route_getProfileStatus);
 
-// Paths - use environment variables with fallback to defaults
-const BOT_DIR = process.env.BOT_DIR || path.join(__dirname, '..', 'new-version');
-const CONFIG_PATH = process.env.CONFIG_PATH || path.join(BOT_DIR, 'config.json');
-const AUTH_PATH = process.env.AUTH_PATH || path.join(__dirname, 'auth.json');
-const crypto = require('crypto');
+// ====================================================================================
+// [Route Handlers]
 
-// Helper function to read auth
+async function route_homePage(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const profiles = await listProfiles();
+  const profilesWithStatus = await getProfilesWithStatus(profiles);
+  return reply.view('index.ejs', {profiles: profilesWithStatus, maxProfiles: MAX_PROFILE});
+}
+
+async function route_loginPage(request, reply) {
+  const guestCheck = await requireGuest(request, reply);
+  if(guestCheck) return guestCheck;
+
+  return reply.view('login.ejs', {error: null});
+}
+
+async function route_attemptLogin(request, reply) {
+  const {password} = request.body;
+  if(!password) {
+    return reply.status(400).send({ success: false, error: 'Password is required'});
+  }
+
+  const isValid = await verifyPassword(password);
+
+  if(!isValid) {
+    return reply.status(401).send({ success: false, error: 'Invalid password'});
+  }
+
+  const {authToken, expiresAt} = generateAuthToken();
+  const success = await updateAuthToken(authToken, expiresAt);
+  if(!success) {
+    return reply.status(500).send({ success: false, error: 'Failed to update auth token'});
+  }
+  return { success: true, token: authToken };
+}
+
+async function route_updatePassword(request, reply) {
+  const {oldPassword, newPassword} = request.body;
+  if(!oldPassword || !newPassword) {
+    return reply.status(400).send({ success: false, error: 'Old password and new password are required'});
+  }
+
+  const isValid = await verifyPassword(oldPassword);
+  if(!isValid) return reply.status(401).send({ success: false, error: 'Invalid old password'});
+
+  const success = await updatePassword(newPassword);
+  if(!success) {
+    return reply.status(500).send({ success: false, error: 'Failed to update password'});
+  }
+
+  return { success: true };
+}
+
+async function route_listProfiles(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const profiles = await listProfiles();
+  const profilesWithStatus = await getProfilesWithStatus(profiles);
+
+  return { success: true, profiles: profilesWithStatus };
+}
+
+async function route_getProfile(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const {profileName} = request.params;
+  const config = await getProfile(profileName);
+
+  if(!config) {
+    return reply.status(404).send({ success: false, error: 'Profile not found'});
+  }
+
+  const status = await readProfileStatus(profileName);
+  return { success: true, profile: {
+    name: profileName,
+    config,
+    status
+  } };
+}
+
+async function route_updateProfile(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const {profileName} = request.params;
+  const newConfig = request.body;
+
+  if(!profileNameValidator(profileName)) {
+    return reply.status(400).send({ success: false, error: 'Invalid profile name. Use only letters, numbers, underscores, and hyphens.'});
+  }
+
+  if(!profileConfigValidator(newConfig)) {
+    return reply.status(400).send({ success: false, error: 'Invalid profile configuration'});
+  }
+
+  // Check if we are at max profiles (only for new profiles)
+  const existingProfiles = await listProfiles();
+  const isNew = !existingProfiles.includes(profileName);
+  if(isNew && existingProfiles.length >= MAX_PROFILE) {
+    return reply.status(400).send({ success: false, error: `Max number of profiles (${MAX_PROFILE}) reached. Delete a profile to add a new one.`});
+  }
+
+  // Save profile
+  const success = await saveProfile(profileName, newConfig);
+  if(!success) {
+    return reply.status(500).send({ success: false, error: 'Failed to save profile'});
+  }
+
+  return { success: true, message: 'Profile saved successfully'};
+}
+
+async function route_deleteProfile(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const {profileName} = request.params;
+  const success = await deleteProfile(profileName);
+  if(!success) {
+    return reply.status(500).send({ success: false, error: 'Failed to delete profile'});
+  }
+
+  return { success: true, message: 'Profile deleted successfully'};
+}
+
+async function route_runSelected(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const {profiles: selectedProfiles} = request.body;
+  if(!Array.isArray(selectedProfiles) || selectedProfiles.length === 0) {
+    return reply.status(400).send({ success: false, error: 'Selected profiles array is required'});
+  }
+
+  // The following profiles will be ignored
+  // 1. Profiles that are already running
+  // 2. Profiles that don't exist
+
+  // Run bot for each selected profile
+  const results = await Promise.all(selectedProfiles.map(async profile => await runBotForProfile(profile)));
+  return { success: true, message: 'Bot started for selected profiles', profiles: selectedProfiles };
+}
+
+async function route_runAll(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const profiles = await listProfiles();
+
+  if(profiles.length === 0) {
+    return reply.status(400).send({success: false, error: 'No profiles found'});
+  }
+
+  // Run bot for each profile
+  const results = await Promise.all(profiles.map(async profile => await runBotForProfile(profile)));
+  return { success: true, message: 'Bot started for all profiles', profiles: profiles };
+}
+
+async function route_getProfileStatus(request, reply) {
+  const authCheck = await requireAuth(request, reply);
+  if(authCheck) return authCheck;
+
+  const profiles = await listProfiles();
+  const profilesWithStatus = await getMultiProfileStatus(profiles);
+  return { success: true, profiles: profilesWithStatus };
+}
+
+// ====================================================================================
+// [Helpers]
+
+// Helper to check if the request is an AJAX request
+function checkAjax(request) {
+  // Checks if the request is an AJAX request
+  return request.headers.accept && request.headers.accept.includes('application/json');
+}
+
+// Helper to get auth token from request
+function authToken(request) {
+  return request.query.token || request.headers['x-auth-token'];
+}
+
+// Helper to require authentication
+async function requireAuth(request, reply) {
+  const token = authToken(request);
+
+  if(!token || !(await checkAuthToken(token))) {
+    if(checkAjax(request)) {
+      return reply.status(401).send({error: 'Unauthorized'});
+    }
+    return reply.redirect('/login');
+  }
+
+  return null;
+}
+
+// Helper to require guest
+async function requireGuest(request, reply, redirectTo='/') {
+  const token = await authToken(request);
+  if(token && await checkAuthToken(token)) {
+    if(checkAjax(request)) {
+      return reply.status(401).send({error: 'Unauthorized'});
+    }
+    return reply.redirect(redirectTo);
+  }
+  return null;
+}
+
+// Helper to generate date selector from numbers
+function generateDateSelectorFromNumbers(row, col) {
+  return `#listcontainer${row} > td:nth-child(${col}) > a > p.lesson_name`;
+}
+
+// Helper to generate location selector from numbers
+function generateLocationSelectorFromNumbers(row, col) {
+  return `#main > div.overflow-wrap > div > fieldset > fieldset > div > table > tbody > tr:nth-child(${row}) > td:nth-child(${col}) > div > label`;
+}
+
+// Helper to parse profile's status file
+function parseProfileStatus(content) {
+  // Initialize status object
+  const status = {status: 'inactive', timestamp: null, message: null, elapsed: null};
+  
+  // If content is empty, return status object
+  if(!content || content.trim() === '') {
+    return status;
+  }
+
+  // Split content into parts
+  const parts = content.trim().split('@');
+  if(parts.length < 2) {
+    return status;
+  }
+
+  // Get timestamp and status part
+  status.timestamp = parts[0];
+  const statusPart = parts[1];
+
+  // If status part is "Running", set status to running
+  if(statusPart === "Running") {
+    status.status = 'running';
+    return status;
+  }
+
+  // Split status part into parts
+  const statusParts = statusPart.split('#');
+  if(statusParts.length < 3) {
+    return status;
+  }
+
+  // Set status, message, and elapsed
+  status.status = statusParts[0] === 'Success' ? 'success' : 'failure';
+  status.message = statusParts[1];
+  status.elapsed = statusParts[2];
+  return status;
+}
+
+// Helper to ensure file exists
+async function ensureFileExists(filePath) {
+  try {
+    await fs.access(filePath, fs.constants.F_OK); // Check if the file exists
+  } catch (error) {
+    if (error.code === 'ENOENT') { // File does not exist
+      try {
+        await fs.writeFile(filePath, ''); // Create the file
+      } catch (writeError) {
+        console.error('{Error creating file} ', writeError);
+      }
+    } else {
+      console.error('{Error accessing file} ', error);
+    }
+  }
+}
+
+// ====================================================================================
+// [Validators]
+
+//
+function profileNameValidator(profileName) {
+  return /^[a-zA-Z0-9_-]+$/.test(profileName);
+}
+
+// Function to validate profile configuration
+function profileConfigValidator(config) {
+  if(!config.login || !config.reservation || !config.store || !config.lesson) {
+    return false;
+  }
+  return true;
+}
+
+// ====================================================================================
+// [Lower level operations]
+
+// ------------------------------------------------------------------------------------------------
+// [Auth related operations]
+
+// Function to ensure directories exist
+async function ensureDirectoriesExist() {
+  try{
+    await fs.mkdir(PROFILES_DIR, {recursive: true});
+    await fs.mkdir(STATUS_DIR, {recursive: true});
+  } catch (error) {
+    console.error('{Error ensuring directories exist} ', error);
+    return false;
+  }
+  return true;
+}
+
+// Function to read auth
 async function readAuth() {
   try {
-    const data = await fs.readFile(AUTH_PATH, 'utf-8');
+    const data = await fs.readFile(AUTH_PATH, 'utf8');
     return JSON.parse(data);
   } catch (error) {
+    console.error('{Error reading auth} ', error);
     return null;
   }
 }
 
-// Helper function to update password
+// Function to write auth
+async function writeAuth(auth) {
+  try {
+    await fs.writeFile(AUTH_PATH, JSON.stringify(auth, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('{Error writing auth} ', error);
+    return false;
+  }
+  return true;
+}
+
+// Function to update password
 async function updatePassword(newPassword) {
-  await fs.writeFile(AUTH_PATH, JSON.stringify({ password: newPassword }, null, 2), 'utf-8');
+  try {
+    const hashedPassword = hashPassword(newPassword);
+    await fs.writeFile(AUTH_PATH, JSON.stringify({password: hashedPassword}, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('{Error updating password} ', error);
+    return false;
+  }
+  return true;
 }
 
-// Simple auth token generation (hash of password)
-function generateAuthToken(password) {
-  return crypto.createHash('sha256').update(password + 'ritmos-bot-salt').digest('hex');
-}
-
-// Helper to verify password
+// Function to verify password
 async function verifyPassword(password) {
   const auth = await readAuth();
-  if (!auth) return false;
-  return auth.password === password;
+  if(!auth) return false;
+  const hashed = hashPassword(password);
+  return hashed === auth.password;
 }
 
-// Helper to check auth token
-async function checkAuthToken(token) {
-  const auth = await readAuth();
-  if (!auth) return false;
-  const expectedToken = generateAuthToken(auth.password);
-  return token === expectedToken;
+// Function to hash password
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password + AUTH_SALT).digest('hex');
 }
 
-// Helper function to read config
-async function readConfig() {
+// Function to generate auth token
+function generateAuthToken() {
+  const authToken = crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + 1000 * 60 * 60;
+  return {authToken, expiresAt};
+}
+
+// Function to update auth token
+async function updateAuthToken(authToken, expiresAt) {
   try {
-    const data = await fs.readFile(CONFIG_PATH, 'utf-8');
-    return JSON.parse(data);
+    const auth = await readAuth();
+    if(!auth) return false;
+    auth.authToken = authToken;
+    auth.expiresAt = expiresAt;
+    const success = await writeAuth(auth);
+    return success;
   } catch (error) {
+    console.error('{Error writing auth token} ', error);
+    return false;
+  }
+}
+
+// Function to check auth token
+async function checkAuthToken(authToken) {  
+  const auth = await readAuth();
+  if(!auth) return false;
+  const now = Date.now();
+  if(now > auth.expiresAt) return false;
+  return authToken === auth.authToken;
+}
+
+// ------------------------------------------------------------------------------------------------
+// [Profile related operations]
+
+// Function to list profiles
+async function listProfiles() {
+  try {
+    const files = await fs.readdir(PROFILES_DIR);
+    const profiles = files
+      .filter(file => file.endsWith('.json'))
+      .map(file => file.replace('.json', ''));
+    return profiles;
+  } catch (error) {
+    console.error('{Error listing profiles} ', error);
+    return [];
+  }
+}
+
+// Function to get profile
+async function getProfile(profileName) {
+  try {
+    const profilePath = path.join(PROFILES_DIR, `${profileName}.json`);
+    const data = await fs.readFile(profilePath, 'utf8');
+    const config = JSON.parse(data);
+    return config;
+  } catch (error) {
+    console.error('{Error getting profile} ', error);
     return null;
   }
 }
 
-// Helper function to write config
-async function writeConfig(config) {
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
-}
-
-// Login page route
-fastify.get('/login', async (request, reply) => {
-  const token = request.query.token;
-  if (token && await checkAuthToken(token)) {
-    // Already authenticated, redirect to main page
-    return reply.redirect('/');
-  }
-  return reply.view('login.ejs', { error: null });
-});
-
-// Login POST route
-fastify.post('/api/login', async (request, reply) => {
-  const { password } = request.body;
-  
-  if (!password) {
-    return reply.status(400).send({ success: false, error: 'Password required' });
-  }
-  
-  const isValid = await verifyPassword(password);
-  
-  if (isValid) {
-    const token = generateAuthToken(password);
-    return { success: true, token };
-  } else {
-    return reply.status(401).send({ success: false, error: 'Invalid password' });
-  }
-});
-
-// Update password route
-fastify.post('/api/update-password', async (request, reply) => {
-  const { currentPassword, newPassword } = request.body;
-  
-  if (!currentPassword || !newPassword) {
-    return reply.status(400).send({ success: false, error: 'Current password and new password required' });
-  }
-  
-  const isValid = await verifyPassword(currentPassword);
-  
-  if (!isValid) {
-    return reply.status(401).send({ success: false, error: 'Current password is incorrect' });
-  }
-  
-  await updatePassword(newPassword);
-  const token = generateAuthToken(newPassword);
-  
-  return { success: true, message: 'Password updated successfully', token };
-});
-
-// Auth middleware for protected routes
-async function requireAuth(request, reply) {
-  const token = request.query.token || request.headers['x-auth-token'];
-  
-  if (!token) {
-    if (request.headers.accept && request.headers.accept.includes('application/json')) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
-    }
-    return reply.redirect('/login');
-  }
-  
-  const isValid = await checkAuthToken(token);
-  if (!isValid) {
-    if (request.headers.accept && request.headers.accept.includes('application/json')) {
-      return reply.status(401).send({ success: false, error: 'Invalid authentication token' });
-    }
-    return reply.redirect('/login');
-  }
-  
-  return null; // Auth passed
-}
-
-// Home/Index route (protected)
-fastify.get('/', async (request, reply) => {
-  const authCheck = await requireAuth(request, reply);
-  if (authCheck) return authCheck;
-  
-  const config = await readConfig();
-  if (!config) {
-    return reply.code(500).send('Error: Could not read bot configuration. Please ensure config.json exists in new-version/');
-  }
-  
-  const latestResult = botState.results.length > 0 ? botState.results[botState.results.length - 1] : null;
-  
-  return reply.view('index.ejs', {
-    config,
-    isRunning: botState.isRunning,
-    latestResult,
-    allResults: botState.results.slice(-10).reverse() // Last 10 results
-  });
-});
-
-// Get config route (JSON API) - protected
-fastify.get('/api/config', async (request, reply) => {
-  const authCheck = await requireAuth(request, reply);
-  if (authCheck) return authCheck;
-  
-  const config = await readConfig();
-  return { success: true, config };
-});
-
-// Update config route - protected
-fastify.post('/api/config', async (request, reply) => {
-  const authCheck = await requireAuth(request, reply);
-  if (authCheck) return authCheck;
+// Function to save profile
+async function saveProfile(profileName, config) {
+  // Convert number inputs to selector strings before saving
+  const dateSelector = generateDateSelectorFromNumbers(config.lesson.date_selector.row, config.lesson.date_selector.col);
+  const locationSelector = generateLocationSelectorFromNumbers(config.lesson.location_selector.row, config.lesson.location_selector.col);
+  config.lesson.date_selector.selector = dateSelector;
+  config.lesson.location_selector.selector = locationSelector;
   try {
-    const newConfig = request.body;
-    
-    // Validate config structure
-    if (!newConfig.login || !newConfig.reservation || !newConfig.store || !newConfig.lesson) {
-      return reply.status(400).send({ success: false, error: 'Invalid config structure' });
-    }
-    
-    await writeConfig(newConfig);
-    return { success: true, message: 'Config updated successfully' };
+    const profilePath = path.join(PROFILES_DIR, `${profileName}.json`);
+    await fs.writeFile(profilePath, JSON.stringify(config, null, 2), 'utf-8');
   } catch (error) {
-    return reply.status(500).send({ success: false, error: error.message });
+    console.error('{Error saving profile} ', error);
+    return false;
   }
-});
+  return true;
+}
 
-// Run bot route - protected
-fastify.post('/api/run', async (request, reply) => {
-  const authCheck = await requireAuth(request, reply);
-  if (authCheck) return authCheck;
-  if (botState.isRunning) {
-    return reply.status(400).send({ success: false, error: 'Bot is already running' });
+// Function to delete profile
+async function deleteProfile(profileName) {
+  const profilePath = path.join(PROFILES_DIR, `${profileName}.json`);
+  try {
+    await fs.unlink(profilePath);
+  } catch (error) {
+    console.error('{Error deleting profile} ', error);
+    return false;
   }
-  
-  botState.isRunning = true;
-  const runId = Date.now();
-  const startTime = new Date();
-  
-  const result = {
-    id: runId,
-    startTime: startTime.toISOString(),
-    status: 'running',
-    logs: [],
-    error: null,
-    endTime: null,
-    duration: null
-  };
-  
-  botState.results.push(result);
-  botState.lastRun = result;
-  
-  // Limit results to last 50
-  if (botState.results.length > 50) {
-    botState.results = botState.results.slice(-50);
-  }
-  
-  // Run bot in background
-  runBot(runId, result).catch(err => {
-    console.error('Bot execution error:', err);
-  });
-  
-  return { success: true, runId, message: 'Bot started' };
-});
+  return true;
+}
 
-// Get bot status route - protected
-fastify.get('/api/status', async (request, reply) => {
-  const authCheck = await requireAuth(request, reply);
-  if (authCheck) return authCheck;
-  return {
-    isRunning: botState.isRunning,
-    lastRun: botState.lastRun,
-    latestResults: botState.results.slice(-10).reverse()
-  };
-});
+// ------------------------------------------------------------------------------------------------
+// [Profile status related operations]
 
-// Get results route - protected
-fastify.get('/api/results/:runId', async (request, reply) => {
-  const authCheck = await requireAuth(request, reply);
-  if (authCheck) return authCheck;
-  const runId = parseInt(request.params.runId);
-  const result = botState.results.find(r => r.id === runId);
-  
-  if (!result) {
-    return reply.status(404).send({ success: false, error: 'Result not found' });
-  }
-  
-  return { success: true, result };
-});
+// Function to read profile status
+async function readProfileStatus(profileName) {
+  const statusPath = path.join(STATUS_DIR, `${profileName}`);
+  try {
+    await ensureFileExists(statusPath);
+    const content = await fs.readFile(statusPath, 'utf8');
+    const parsed = parseProfileStatus(content);
 
-// Function to run the bot
-async function runBot(runId, result) {
-  return new Promise(async (resolve) => {
-    const resultIndex = botState.results.findIndex(r => r.id === runId);
-    if (resultIndex === -1) return resolve();
-    
-    // Check if bot is built, if not build it first
-    try {
-      await fs.access(path.join(BOT_DIR, 'dist', 'index.js'));
-    } catch (error) {
-      // Bot not built, build it first
-      result.logs.push({
-        time: new Date().toISOString(),
-        type: 'stdout',
-        message: 'Bot not built. Building...'
-      });
-      
-      const buildProcess = spawn('pnpm', ['run', 'build'], {
-        cwd: BOT_DIR,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      
-      await new Promise((buildResolve) => {
-        buildProcess.on('close', (code) => {
-          if (code !== 0) {
-            result.status = 'error';
-            result.success = false;
-            result.error = 'Failed to build bot';
-            botState.isRunning = false;
-            return buildResolve();
-          }
-          buildResolve();
-        });
-      });
+    if(parsed.status === 'running' && parsed.timestamp) {
+      const timestampDate = new Date(parsed.timestamp);
+      const now = new Date();
+      const passedSeconds = (now - timestampDate) / 1000;
+      if(passedSeconds > BOT_ESTIMATED_ELAPSED_SECONDS) {
+        parsed.status = 'inactive';
+      }
     }
-    
-    // Change to bot directory and run
-    const botProcess = spawn('node', ['dist/index.js', '--production'], {
-      cwd: BOT_DIR,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    
-    let stdout = '';
-    let stderr = '';
-    
-    botProcess.stdout.on('data', (data) => {
-      const text = data.toString();
-      stdout += text;
-      result.logs.push({
-        time: new Date().toISOString(),
-        type: 'stdout',
-        message: text.trim()
-      });
-    });
-    
-    botProcess.stderr.on('data', (data) => {
-      const text = data.toString();
-      stderr += text;
-      result.logs.push({
-        time: new Date().toISOString(),
-        type: 'stderr',
-        message: text.trim()
-      });
-    });
-    
-    botProcess.on('close', (code) => {
-      const endTime = new Date();
-      result.endTime = endTime.toISOString();
-      result.duration = ((endTime - new Date(result.startTime)) / 1000).toFixed(3);
-      result.status = code === 0 ? 'completed' : 'failed';
-      result.exitCode = code;
-      result.stdout = stdout;
-      result.stderr = stderr;
-      
-      // Determine success based on logs
-      const logsText = stdout + stderr;
-      if (code === 0 && logsText.includes('プログラム終了') && !logsText.includes('ループアウト') && !logsText.includes('エラー')) {
-        result.success = true;
-      } else {
-        result.success = false;
-        if (logsText.includes('ループアウト')) {
-          result.error = 'Loop timeout - lesson selection failed';
-        } else if (code !== 0) {
-          result.error = `Process exited with code ${code}`;
-        } else {
-          result.error = 'Unknown error';
-        }
-      }
-      
-      botState.isRunning = false;
-      botState.lastRun = result;
-      
-      // Update result in array
-      if (resultIndex !== -1) {
-        botState.results[resultIndex] = result;
-      }
-      
-      resolve();
-    });
-    
-    botProcess.on('error', (error) => {
-      const endTime = new Date();
-      result.endTime = endTime.toISOString();
-      result.duration = ((endTime - new Date(result.startTime)) / 1000).toFixed(3);
-      result.status = 'error';
-      result.success = false;
-      result.error = error.message;
-      result.stderr = error.stack || error.message;
-      
-      botState.isRunning = false;
-      botState.lastRun = result;
-      
-      if (resultIndex !== -1) {
-        botState.results[resultIndex] = result;
-      }
-      
-      resolve();
-    });
-  });
+    return parsed;
+  } catch (error) {
+    console.error('{Error reading profile status} ', error);
+    return null;
+  }
+}
+
+// Function to get status of multiple profiles
+async function getMultiProfileStatus(profiles) {
+  const statuses = await Promise.all(
+    profiles.map(async (profile) => {
+      const status = await readProfileStatus(profile);
+      return {
+        name: profile,
+        status,
+      };
+    })
+  );
+  return statuses;
+}
+
+// Function to get profiles with status
+async function getProfilesWithStatus(profiles) {
+  const profilesWithStatus = await Promise.all(
+    profiles.map(async (profile) => {
+      const config = await getProfile(profile);
+      const status = await readProfileStatus(profile);
+      return {
+        name: profile,
+        config,
+        status
+      };
+    })
+  );
+  return profilesWithStatus;
+}
+
+// ------------------------------------------------------------------------------------------------
+// [Bot related operations]
+
+// Function to check if a profile is running
+async function checkProfileRunning(profileName) {
+  const status = await readProfileStatus(profileName);
+  if(!status) {
+    console.log(`Profile Status ${profileName} not found`);
+    return false;
+  }
+  
+  return status.status === 'running';
+}
+
+// Function to run bot for a specific profile
+async function runBotForProfile(profileName) {
+  // Get profile configuration
+  const config = await getProfile(profileName);
+  if(!config) {
+    console.log(`Profile ${profileName} not found`);
+    return false;
+  }
+
+  // 
+  if(await checkProfileRunning(profileName)) {
+    console.log(`Profile ${profileName} is already running`);
+    return false;
+  }
+
+  //
+  runBot(profileName, config);
+  return true;
+}
+
+//
+async function runBot(profileName, config) {
+  console.log('[Trace] Running bot for profile: ', profileName);
+  try {
+    await piscina.run({ configData: config, isProduction: true, profile: profileName });
+  } catch (err) {
+    console.error('Failed to run bot with Piscina: ', err);
+    return false;
+  }
+  return true;
+}
+
+// ====================================================================================
+// [Global objects]
+
+const piscina = new Piscina({
+  filename: path.join(BOT_DIR, 'index.js'),
+  maxThreads: MAX_PROFILE,
+});
+
+// ====================================================================================
+// [Start]
+
+//
+async function startServer() {
+  await ensureDirectoriesExist();
+  try{
+    await fastify.listen({port: PORT, host: HOST});
+    console.log(`Server is running on ${HOST}:${PORT} in ${NODE_ENV} mode`);
+  } catch (error) {
+    console.error('{Error starting server} ', error);
+    process.exit(1);
+  }
+  // Note: Server will keep running until process is terminated
+  // fastify.close() should only be called on graceful shutdown
 }
 
 // Start server
-const start = async () => {
-  try {
-    const port = process.env.PORT || 3000;
-    await fastify.listen({ port, host: '0.0.0.0' });
-    console.log(`Server running on http://localhost:${port}`);
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-};
-
-start();
-
+startServer();
