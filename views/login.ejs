@@ -1,29 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Ritmos Bot Controller</title>
+    <title>ログイン - リトモス ボット コントローラー</title>
     <link rel="stylesheet" href="/public/style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🤖 Ritmos Booking Bot Controller</h1>
+            <h1>🤖 リトモス予約ボット コントローラー</h1>
         </header>
         <main>
             <div class="login-container">
                 <div class="login-card">
-                    <h2>Admin Login</h2>
+                    <h2>管理者ログイン</h2>
                     <% if (error) { %>
                         <div class="error-message"><%= error %></div>
                     <% } %>
                     <form id="loginForm" class="login-form">
                         <div class="form-group">
-                            <label for="password">Password:</label>
+                            <label for="password">パスワード:</label>
                             <input type="password" id="password" name="password" required autofocus>
                         </div>
-                        <button type="submit" class="btn btn-primary">Login</button>
+                        <button type="submit" class="btn btn-primary">ログイン</button>
                     </form>
                 </div>
             </div>
@@ -52,12 +52,12 @@
                     // Redirect to main page with token
                     window.location.href = `/?token=${result.token}`;
                 } else {
-                    alert('Invalid password. Please try again.');
+                    alert('パスワードが正しくありません。もう一度お試しください。');
                     document.getElementById('password').value = '';
                     document.getElementById('password').focus();
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('エラー: ' + error.message);
             }
         });
     </script>

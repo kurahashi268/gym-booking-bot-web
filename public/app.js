@@ -64,14 +64,14 @@ if (passwordForm) {
             const result = await response.json();
             
             if (result.success) {
-                showNotification('Password updated successfully!', 'success');
+                showNotification('パスワードが正常に更新されました！', 'success');
                 // Clear form
                 document.getElementById('passwordForm').reset();
             } else {
-                showNotification('Error updating password: ' + result.error, 'error');
+                showNotification('パスワード更新エラー: ' + result.error, 'error');
             }
         } catch (error) {
-            showNotification('Error: ' + error.message, 'error');
+            showNotification('エラー: ' + error.message, 'error');
         }
     });
 }
@@ -206,16 +206,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
                 
                 if (result.success) {
-                    showNotification('Profile saved successfully!', 'success');
+                    showNotification('プロフィールが正常に保存されました！', 'success');
                     // Reload page after a short delay to show updated status
                     setTimeout(() => {
                         window.location.reload();
                     }, 1000);
                 } else {
-                    showNotification('Error saving profile: ' + result.error, 'error');
+                    showNotification('プロフィール保存エラー: ' + result.error, 'error');
                 }
             } catch (error) {
-                showNotification('Error: ' + error.message, 'error');
+                showNotification('エラー: ' + error.message, 'error');
             }
         });
     });
@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function deleteProfile(profileName) {
     if (!checkAuth()) return;
     
-    if (!confirm(`Are you sure you want to delete profile "${profileName}"?`)) {
+    if (!confirm(`プロフィール「${profileName}」を削除してもよろしいですか？`)) {
         return;
     }
     
@@ -238,15 +238,15 @@ async function deleteProfile(profileName) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('Profile deleted successfully!', 'success');
+            showNotification('プロフィールが正常に削除されました！', 'success');
             setTimeout(() => {
                 window.location.reload();
             }, 1000);
         } else {
-            showNotification('Error deleting profile: ' + result.error, 'error');
+            showNotification('プロフィール削除エラー: ' + result.error, 'error');
         }
     } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
+        showNotification('エラー: ' + error.message, 'error');
     }
 }
 
@@ -286,7 +286,7 @@ if (addProfileForm) {
         
         const profileName = document.getElementById('newProfileName').value.trim();
         if (!profileName) {
-            showNotification('Profile name is required', 'error');
+            showNotification('プロフィール名は必須です', 'error');
             return;
         }
         
@@ -328,16 +328,16 @@ if (addProfileForm) {
             const result = await response.json();
             
             if (result.success) {
-                showNotification('Profile created successfully!', 'success');
+                showNotification('プロフィールが正常に作成されました！', 'success');
                 closeAddProfileModal();
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
             } else {
-                showNotification('Error creating profile: ' + result.error, 'error');
+                showNotification('プロフィール作成エラー: ' + result.error, 'error');
             }
         } catch (error) {
-            showNotification('Error: ' + error.message, 'error');
+            showNotification('エラー: ' + error.message, 'error');
         }
     });
 }
@@ -377,10 +377,10 @@ function updateRunButtonState() {
     if (runSelectedBtn) {
         if (selectedCheckboxes.length > 0) {
             runSelectedBtn.disabled = false;
-            runSelectedBtn.textContent = `▶ Run Selected (${selectedCheckboxes.length})`;
+            runSelectedBtn.textContent = `▶ 選択したボットを実行 (${selectedCheckboxes.length})`;
         } else {
             runSelectedBtn.disabled = true;
-            runSelectedBtn.textContent = '▶ Run Selected Bots';
+            runSelectedBtn.textContent = '▶ 選択したボットを実行';
         }
     }
     
@@ -422,11 +422,11 @@ if (runSelectedBtn) {
         const selectedProfiles = Array.from(selectedCheckboxes).map(cb => cb.value);
         
         if (selectedProfiles.length === 0) {
-            showNotification('Please select at least one profile', 'error');
+            showNotification('少なくとも1つのプロフィールを選択してください', 'error');
             return;
         }
         
-        if (!confirm(`Are you sure you want to run ${selectedProfiles.length} selected bot(s)?`)) {
+        if (!confirm(`選択した${selectedProfiles.length}つのボットを実行してもよろしいですか？`)) {
             return;
         }
         
@@ -440,7 +440,7 @@ if (runSelectedBtn) {
             const result = await response.json();
             
             if (result.success) {
-                showNotification(`Started ${result.profiles.length} bot(s)!`, 'success');
+                showNotification(`${result.profiles.length}つのボットを開始しました！`, 'success');
                 // Disable buttons and start polling
                 runSelectedBtn.disabled = true;
                 const runAllBtn = document.getElementById('runAllBtn');
@@ -450,10 +450,10 @@ if (runSelectedBtn) {
                 updateRunButtonState();
                 startStatusPolling();
             } else {
-                showNotification('Error starting bots: ' + result.error, 'error');
+                showNotification('ボット開始エラー: ' + result.error, 'error');
             }
         } catch (error) {
-            showNotification('Error: ' + error.message, 'error');
+            showNotification('エラー: ' + error.message, 'error');
         }
     });
     
@@ -467,7 +467,7 @@ if (runAllBtn) {
     runAllBtn.addEventListener('click', async () => {
         if (!checkAuth()) return;
         
-        if (!confirm('Are you sure you want to run all bots?')) {
+        if (!confirm('すべてのボットを実行してもよろしいですか？')) {
             return;
         }
         
@@ -480,7 +480,7 @@ if (runAllBtn) {
             const result = await response.json();
             
             if (result.success) {
-                showNotification(`Started ${result.profiles.length} bot(s)!`, 'success');
+                showNotification(`${result.profiles.length}つのボットを開始しました！`, 'success');
                 // Disable buttons and start polling
                 runAllBtn.disabled = true;
                 if (runSelectedBtn) runSelectedBtn.disabled = true;
@@ -489,10 +489,10 @@ if (runAllBtn) {
                 updateRunButtonState();
                 startStatusPolling();
             } else {
-                showNotification('Error starting bots: ' + result.error, 'error');
+                showNotification('ボット開始エラー: ' + result.error, 'error');
             }
         } catch (error) {
-            showNotification('Error: ' + error.message, 'error');
+            showNotification('エラー: ' + error.message, 'error');
         }
     });
 }
@@ -545,13 +545,13 @@ function updateProfileStatuses(profiles) {
                 
                 // Update badge text
                 if (profile.status.status === 'running') {
-                    badge.textContent = '🟢 Running';
+                    badge.textContent = '🟢 実行中';
                 } else if (profile.status.status === 'success') {
-                    badge.textContent = '✅ Success';
+                    badge.textContent = '✅ 成功';
                 } else if (profile.status.status === 'failure') {
-                    badge.textContent = '❌ Failed';
+                    badge.textContent = '❌ 失敗';
                 } else {
-                    badge.textContent = '⚪ Inactive';
+                    badge.textContent = '⚪ 無効';
                 }
             }
             
@@ -576,22 +576,22 @@ function updateProfileStatusInfo(profile) {
     
     let html = '';
     if (profile.status.status === 'running') {
-        html = `<p><strong>Status:</strong> Running since ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A'}</p>`;
+        html = `<p><strong>ステータス:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A'} から実行中</p>`;
     } else if (profile.status.status === 'success') {
         html = `
-            <p><strong>Status:</strong> Success</p>
-            <p><strong>Completed:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A'}</p>
-            <p><strong>Elapsed Time:</strong> ${profile.status.elapsed || 'N/A'}</p>
+            <p><strong>ステータス:</strong> 成功</p>
+            <p><strong>完了:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A'}</p>
+            <p><strong>経過時間:</strong> ${profile.status.elapsed || 'N/A'}</p>
         `;
     } else if (profile.status.status === 'failure') {
         html = `
-            <p><strong>Status:</strong> Failed</p>
-            <p><strong>Failed:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A'}</p>
-            <p><strong>Elapsed Time:</strong> ${profile.status.elapsed || 'N/A'}</p>
-            ${profile.status.message ? `<p><strong>Error:</strong> <span class="error-text">${profile.status.message}</span></p>` : ''}
+            <p><strong>ステータス:</strong> 失敗</p>
+            <p><strong>失敗:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A'}</p>
+            <p><strong>経過時間:</strong> ${profile.status.elapsed || 'N/A'}</p>
+            ${profile.status.message ? `<p><strong>エラー:</strong> <span class="error-text">${profile.status.message}</span></p>` : ''}
         `;
     } else {
-        html = `<p><strong>Status:</strong> Inactive</p>`;
+        html = `<p><strong>ステータス:</strong> 無効</p>`;
     }
     
     statusInfo.innerHTML = html;

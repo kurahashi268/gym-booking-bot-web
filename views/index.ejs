@@ -1,40 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ritmos Bot Controller</title>
+    <title>リトモス ボット コントローラー</title>
     <link rel="stylesheet" href="/public/style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🤖 Ritmos Booking Bot Controller</h1>
+            <h1>🤖 リトモス予約ボット コントローラー</h1>
         </header>
         <main>
             <div class="dashboard">
                 <div class="password-section">
-                    <h2>Change Password</h2>
+                    <h2>パスワード変更</h2>
                     <form id="passwordForm" class="password-form">
                         <div class="form-group">
-                            <label>Current Password:</label>
+                            <label>現在のパスワード:</label>
                             <input type="password" id="currentPassword" name="currentPassword" required>
                         </div>
                         <div class="form-group">
-                            <label>New Password:</label>
+                            <label>新しいパスワード:</label>
                             <input type="password" id="newPassword" name="newPassword" required>
                         </div>
-                        <button type="submit" class="btn btn-secondary">Update Password</button>
+                        <button type="submit" class="btn btn-secondary">パスワードを更新</button>
                     </form>
                 </div>
 
                 <div class="profiles-section">
                     <div class="profiles-header">
-                        <h2>Profiles</h2>
+                        <h2>プロフィール</h2>
                         <div style="display: flex; gap: 12px;">
-                            <button id="addProfileBtn" class="btn btn-primary">+ Add Profile</button>
-                            <button id="runSelectedBtn" class="btn btn-success">▶ Run Selected Bots</button>
-                            <button id="runAllBtn" class="btn btn-success" style="opacity: 0.7;">▶ Run All Bots</button>
+                            <button id="addProfileBtn" class="btn btn-primary">+ プロフィールを追加</button>
+                            <button id="runSelectedBtn" class="btn btn-success">▶ 選択したボットを実行</button>
+                            <button id="runAllBtn" class="btn btn-success" style="opacity: 0.7;">▶ すべてのボットを実行</button>
                         </div>
                     </div>
                     
@@ -45,9 +45,9 @@
                                     <th style="width: 40px;">
                                         <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
                                     </th>
-                                    <th>Profile Name</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
+                                    <th>プロフィール名</th>
+                                    <th>ステータス</th>
+                                    <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -60,20 +60,20 @@
                                         <td class="profile-status-cell">
                                             <span class="profile-status-badge status-<%= profile.status.status || 'inactive' %>">
                                                 <% if (profile.status.status === 'running') { %>
-                                                    🟢 Running
+                                                    🟢 実行中
                                                 <% } else if (profile.status.status === 'success') { %>
-                                                    ✅ Success
+                                                    ✅ 成功
                                                 <% } else if (profile.status.status === 'failure') { %>
-                                                    ❌ Failed
+                                                    ❌ 失敗
                                                 <% } else { %>
-                                                    ⚪ Inactive
+                                                    ⚪ 無効
                                                 <% } %>
                                             </span>
                                         </td>
                                         <td class="profile-actions-cell">
                                             <button class="profile-expand-btn" onclick="toggleProfileDetails('<%= profile.name %>')" data-profile="<%= profile.name %>">
                                                 <span class="expand-icon">▼</span>
-                                                <span>Details</span>
+                                                <span>詳細</span>
                                             </button>
                                         </td>
                                     </tr>
@@ -82,53 +82,53 @@
                                             <div class="profile-details-content">
                                                 <div class="profile-status-info">
                                                     <% if (profile.status.status === 'running') { %>
-                                                        <p><strong>Status:</strong> Running since <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A' %></p>
+                                                        <p><strong>ステータス:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A' %> から実行中</p>
                                                     <% } else if (profile.status.status === 'success') { %>
-                                                        <p><strong>Status:</strong> Success</p>
-                                                        <p><strong>Completed:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A' %></p>
-                                                        <p><strong>Elapsed Time:</strong> <%= profile.status.elapsed || 'N/A' %></p>
+                                                        <p><strong>ステータス:</strong> 成功</p>
+                                                        <p><strong>完了:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A' %></p>
+                                                        <p><strong>経過時間:</strong> <%= profile.status.elapsed || 'N/A' %></p>
                                                     <% } else if (profile.status.status === 'failure') { %>
-                                                        <p><strong>Status:</strong> Failed</p>
-                                                        <p><strong>Failed:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString() : 'N/A' %></p>
-                                                        <p><strong>Elapsed Time:</strong> <%= profile.status.elapsed || 'N/A' %></p>
+                                                        <p><strong>ステータス:</strong> 失敗</p>
+                                                        <p><strong>失敗:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A' %></p>
+                                                        <p><strong>経過時間:</strong> <%= profile.status.elapsed || 'N/A' %></p>
                                                         <% if (profile.status.message) { %>
-                                                            <p><strong>Error:</strong> <span class="error-text"><%= profile.status.message %></span></p>
+                                                            <p><strong>エラー:</strong> <span class="error-text"><%= profile.status.message %></span></p>
                                                         <% } %>
                                                     <% } else { %>
-                                                        <p><strong>Status:</strong> Inactive</p>
+                                                        <p><strong>ステータス:</strong> 無効</p>
                                                     <% } %>
                                                 </div>
                                                 
                                                 <form class="profile-form" data-profile="<%= profile.name %>">
                                                     <div class="form-group">
-                                                        <label>Login ID:</label>
+                                                        <label>ログインID:</label>
                                                         <input type="text" name="login.id" value="<%= profile.config.login.id %>" required>
                                                     </div>
                                                     <div class="form-group">
-                                                        <label>Password:</label>
+                                                        <label>パスワード:</label>
                                                         <input type="text" name="login.password" value="<%= profile.config.login.password %>" required>
                                                     </div>
                                                     <div class="form-group">
-                                                        <label>Reservation Time:</label>
+                                                        <label>予約時間:</label>
                                                         <input type="datetime-local" name="reservation.time" value="<%= profile.config.reservation.time.replace(' ', 'T').substring(0, 16) %>" required>
                                                     </div>
                                                     <div class="form-group">
-                                                        <label>Flying Time (seconds):</label>
+                                                        <label>フライング時間（秒）:</label>
                                                         <input type="number" name="reservation.flying_time" value="<%= profile.config.reservation.flying_time %>" step="0.01" required>
                                                     </div>
                                                     <div class="form-group">
-                                                        <label>Confirm Reservation:</label>
+                                                        <label>予約を確認:</label>
                                                         <input type="checkbox" name="reservation.confirm_reservation" <%= profile.config.reservation.confirm_reservation ? 'checked' : '' %>>
                                                     </div>
                                                     <div class="form-group">
-                                                        <label>Store Index:</label>
+                                                        <label>店舗インデックス:</label>
                                                         <input type="number" name="store.selected_store_index" value="<%= profile.config.store.selected_store_index %>" required>
                                                     </div>
                                                 <div class="form-group">
-                                                    <label>Lesson Date Selector:</label>
+                                                    <label>レッスン日付セレクター:</label>
                                                     <div class="selector-input-group">
                                                         <div class="selector-numbers">
-                                                            <label class="selector-number-label">Date Row:</label>
+                                                            <label class="selector-number-label">日付行:</label>
                                                             <input type="number" class="selector-number-input" 
                                                                    name="lesson.date_selector.row"
                                                                    data-selector-type="date" 
@@ -136,7 +136,7 @@
                                                                    data-profile="<%= profile.name %>"
                                                                    value="<%= profile.config.lesson.date_selector.row || 3 %>" 
                                                                    min="1" required>
-                                                            <label class="selector-number-label">Date Col:</label>
+                                                            <label class="selector-number-label">日付列:</label>
                                                             <input type="number" class="selector-number-input" 
                                                                     name="lesson.date_selector.col"
                                                                     data-selector-type="date" 
@@ -154,10 +154,10 @@
                                                     </div>
                                                 </div>
                                                 <div class="form-group">
-                                                    <label>Lesson Location Selector:</label>
+                                                    <label>レッスン場所セレクター:</label>
                                                     <div class="selector-input-group">
                                                         <div class="selector-numbers">
-                                                            <label class="selector-number-label">Row Index:</label>
+                                                            <label class="selector-number-label">行インデックス:</label>
                                                             <input type="number" class="selector-number-input" 
                                                                    name="lesson.location_selector.row" 
                                                                    data-selector-type="location" 
@@ -165,7 +165,7 @@
                                                                    data-profile="<%= profile.name %>"
                                                                    value="<%= profile.config.lesson.location_selector.row || 3 %>" 
                                                                    min="1" required>
-                                                            <label class="selector-number-label">Column Index:</label>
+                                                            <label class="selector-number-label">列インデックス:</label>
                                                             <input type="number" class="selector-number-input" 
                                                                    name="lesson.location_selector.col" 
                                                                    data-selector-type="location" 
@@ -183,8 +183,8 @@
                                                     </div>
                                                 </div>
                                                     <div class="form-actions">
-                                                        <button type="submit" class="btn btn-primary">Save Profile</button>
-                                                        <button type="button" class="btn btn-danger" onclick="deleteProfile('<%= profile.name %>')">Delete Profile</button>
+                                                        <button type="submit" class="btn btn-primary">プロフィールを保存</button>
+                                                        <button type="button" class="btn btn-danger" onclick="deleteProfile('<%= profile.name %>')">プロフィールを削除</button>
                                                     </div>
                                                 </form>
                                             </div>
@@ -195,14 +195,14 @@
                         </table>
                     <% } else { %>
                         <div class="no-profiles">
-                            <p>No profiles found. Click "Add Profile" to create one.</p>
+                            <p>プロフィールが見つかりません。「プロフィールを追加」をクリックして作成してください。</p>
                         </div>
                     <% } %>
                 </div>
             </div>
         </main>
         <footer>
-            <p>&copy; 2025 Ritmos Bot Controller</p>
+            <p>&copy; 2025 リトモス ボット コントローラー</p>
         </footer>
     </div>
 
@@ -210,45 +210,45 @@
     <div id="addProfileModal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add New Profile</h2>
+                <h2>新しいプロフィールを追加</h2>
                 <button class="modal-close" onclick="closeAddProfileModal()">×</button>
             </div>
             <div class="modal-body">
                 <form id="addProfileForm">
                     <div class="form-group">
-                        <label>Profile Name:</label>
-                        <input type="text" id="newProfileName" name="profileName" required pattern="[a-zA-Z0-9_-]+" title="Use only letters, numbers, underscores, and hyphens">
-                        <small>Profile name will be used as the config file name (e.g., hiromi.json)</small>
+                        <label>プロフィール名:</label>
+                        <input type="text" id="newProfileName" name="profileName" required pattern="[a-zA-Z0-9_-]+" title="英数字、アンダースコア、ハイフンのみ使用可能">
+                        <small>プロフィール名は設定ファイル名として使用されます（例: hiromi.json）</small>
                     </div>
                     <div class="form-group">
-                        <label>Login ID:</label>
+                        <label>ログインID:</label>
                         <input type="text" name="login.id" required>
                     </div>
                     <div class="form-group">
-                        <label>Password:</label>
+                        <label>パスワード:</label>
                         <input type="text" name="login.password" required>
                     </div>
                     <div class="form-group">
-                        <label>Reservation Time:</label>
+                        <label>予約時間:</label>
                         <input type="datetime-local" name="reservation.time" required>
                     </div>
                     <div class="form-group">
-                        <label>Flying Time (seconds):</label>
+                        <label>フライング時間（秒）:</label>
                         <input type="number" name="reservation.flying_time" step="0.01" required>
                     </div>
                     <div class="form-group">
-                        <label>Confirm Reservation:</label>
+                        <label>予約を確認:</label>
                         <input type="checkbox" name="reservation.confirm_reservation">
                     </div>
                     <div class="form-group">
-                        <label>Store Index:</label>
+                        <label>店舗インデックス:</label>
                         <input type="number" name="store.selected_store_index" required>
                     </div>
                     <div class="form-group">
-                        <label>Lesson Date Selector:</label>
+                        <label>レッスン日付セレクター:</label>
                         <div class="selector-input-group">
                             <div class="selector-numbers">
-                                <label class="selector-number-label">Row Index:</label>
+                                <label class="selector-number-label">行インデックス:</label>
                                 <input type="number" class="selector-number-input" 
                                        name="lesson.date_selector.row" 
                                        data-selector-type="date" 
@@ -256,7 +256,7 @@
                                        data-profile="new"
                                        value="3" 
                                        min="1" required>
-                                <label class="selector-number-label">Column Index:</label>
+                                <label class="selector-number-label">列インデックス:</label>
                                 <input type="number" class="selector-number-input" 
                                        name="lesson.date_selector.col" 
                                        data-selector-type="date" 
@@ -274,10 +274,10 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Lesson Location Selector:</label>
+                        <label>レッスン場所セレクター:</label>
                         <div class="selector-input-group">
                             <div class="selector-numbers">
-                                <label class="selector-number-label">Row Index:</label>
+                                <label class="selector-number-label">行インデックス:</label>
                                 <input type="number" class="selector-number-input" 
                                        name="lesson.location_selector.row" 
                                        data-selector-type="location" 
@@ -285,7 +285,7 @@
                                        data-profile="new"
                                        value="3" 
                                        min="1" required>
-                                <label class="selector-number-label">Column Index:</label>
+                                <label class="selector-number-label">列インデックス:</label>
                                 <input type="number" class="selector-number-input" 
                                        name="lesson.location_selector.col" 
                                        data-selector-type="location" 
@@ -303,8 +303,8 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Create Profile</button>
-                        <button type="button" class="btn btn-secondary" onclick="closeAddProfileModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">プロフィールを作成</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeAddProfileModal()">キャンセル</button>
                     </div>
                 </form>
             </div>
