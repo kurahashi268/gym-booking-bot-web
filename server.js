@@ -18,8 +18,8 @@ const HOST          =   process.env.HOST || 'localhost';
 const PORT          =   process.env.PORT || 3000;
 const NODE_ENV      =   process.env.NODE_ENV || 'development';
 const AUTH_SALT     =   process.env.AUTH_SALT || 'default_salt';
-const AUTH_PATH     =   path.join(CWD, process.env.AUTH_PATH || 'auth.json');
-const BOT_DIR       =   path.join(CWD, process.env.BOT_DIR || 'bot');
+const AUTH_PATH     =   path.resolve(process.env.AUTH_PATH || 'auth.json');
+const BOT_DIR       =   path.resolve(process.env.BOT_DIR || 'bot');
 const BOT_ESTIMATED_ELAPSED_SECONDS = parseInt(process.env.BOT_ESTIMATED_ELAPSED_SECONDS) || 10;
 const MAX_PROFILE   =   parseInt(process.env.MAX_PROFILE) || 10;
 
@@ -590,7 +590,7 @@ async function runBotForProfile(profileName) {
     return false;
   }
 
-  // 
+  // Check if the profile is already running
   if(await checkProfileRunning(profileName)) {
     console.log(`Profile ${profileName} is already running`);
     return false;
@@ -601,7 +601,7 @@ async function runBotForProfile(profileName) {
   return true;
 }
 
-//
+// Function to run bot
 async function runBot(profileName, config) {
   console.log('[Trace] Running bot for profile: ', profileName);
   try {

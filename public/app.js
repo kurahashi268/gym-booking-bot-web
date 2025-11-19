@@ -474,7 +474,8 @@ if (runAllBtn) {
         try {
             const response = await fetch('/api/run-all', {
                 method: 'POST',
-                headers: getAuthHeaders()
+                headers: getAuthHeaders(),
+                body: "{}",
             });
             
             const result = await response.json();
@@ -506,7 +507,7 @@ function startStatusPolling() {
     statusPollInterval = setInterval(async () => {
         try {
             const response = await fetch('/api/profiles/status', {
-                headers: getAuthHeaders()
+                headers: getAuthHeaders(),
             });
             const data = await response.json();
             
