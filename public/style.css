@@ -997,6 +997,47 @@ footer {
     margin-right: 8px;
 }
 
+/* Unsaved Changes Warning */
+.unsaved-changes-warning {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 2px solid #f59e0b;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    animation: slideInDown 0.3s ease;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.unsaved-changes-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.unsaved-changes-icon {
+    font-size: 1.5em;
+    flex-shrink: 0;
+}
+
+.unsaved-changes-text {
+    color: #92400e;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    flex: 1;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .profile-form {
     grid-column: 1 / -1;
     display: grid;

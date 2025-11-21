@@ -240,7 +240,12 @@ async function route_getProfileStatus(request, reply) {
 // Helper to check if the request is an AJAX request
 function checkAjax(request) {
   // Checks if the request is an AJAX request
-  return request.headers.accept && request.headers.accept.includes('application/json');
+  // return request.headers.accept && request.headers.accept.includes('application/json');
+  // Check if request is AJAX: content-type or accept is 'application/json'
+  return (
+    (request.headers['content-type'] && request.headers['content-type'].includes('application/json')) ||
+    (request.headers.accept && request.headers.accept.includes('application/json'))
+  );
 }
 
 // Helper to get auth token from request

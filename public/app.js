@@ -96,6 +96,12 @@ function toggleProfileDetails(profileName) {
         
         detailsRow.classList.add('expanded');
         expandBtn?.classList.add('expanded');
+        
+        // Check for unsaved changes when expanding
+        const form = detailsRow.querySelector('.profile-form');
+        if (form) {
+            updateUnsavedChangesWarning(form);
+        }
     }
 }
 
@@ -137,6 +143,11 @@ function updateSelectorString(selectorType, profileName) {
     );
     if (displayInput) {
         displayInput.value = selectorString;
+        // Trigger change detection for the form
+        const form = displayInput.closest('.profile-form');
+        if (form && profileName !== 'new') {
+            updateUnsavedChangesWarning(form);
+        }
     }
 }
 
@@ -148,6 +159,11 @@ function initializeSelectorInputs() {
             const selectorType = e.target.getAttribute('data-selector-type');
             const profileName = e.target.getAttribute('data-profile');
             updateSelectorString(selectorType, profileName);
+            // Also trigger change detection for the form
+            const form = e.target.closest('.profile-form');
+            if (form && profileName !== 'new') {
+                updateUnsavedChangesWarning(form);
+            }
         }
     });
     
@@ -156,6 +172,110 @@ function initializeSelectorInputs() {
             const selectorType = e.target.getAttribute('data-selector-type');
             const profileName = e.target.getAttribute('data-profile');
             updateSelectorString(selectorType, profileName);
+            // Also trigger change detection for the form
+            const form = e.target.closest('.profile-form');
+            if (form && profileName !== 'new') {
+                updateUnsavedChangesWarning(form);
+            }
+        }
+    });
+}
+
+// Store original form values for change detection
+const originalFormValues = new Map();
+
+// Get form values as a serializable object
+function getFormValues(form) {
+    const formData = new FormData(form);
+    const values = {};
+    for (const [key, value] of formData.entries()) {
+        values[key] = value;
+    }
+    // Also capture checkbox states
+    form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        values[checkbox.name] = checkbox.checked ? 'on' : 'off';
+    });
+    // Also capture readonly inputs (like selector strings)
+    form.querySelectorAll('input[readonly]').forEach(input => {
+        if (input.name) {
+            values[input.name] = input.value;
+        }
+    });
+    return values;
+}
+
+// Check if form has unsaved changes
+function hasFormChanges(form) {
+    const profileName = form.getAttribute('data-profile');
+    if (!originalFormValues.has(profileName)) return false;
+    
+    const original = originalFormValues.get(profileName);
+    const current = getFormValues(form);
+    
+    // Compare all values
+    for (const key in original) {
+        if (original[key] !== current[key]) {
+            return true;
+        }
+    }
+    // Check for new keys in current
+    for (const key in current) {
+        if (!(key in original)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Show/hide unsaved changes warning
+function updateUnsavedChangesWarning(form) {
+    const profileName = form.getAttribute('data-profile');
+    const detailsRow = document.getElementById(`details-${profileName}`);
+    if (!detailsRow) return;
+    
+    let warningBanner = detailsRow.querySelector('.unsaved-changes-warning');
+    const hasChanges = hasFormChanges(form);
+    
+    if (hasChanges && !warningBanner) {
+        // Create warning banner
+        warningBanner = document.createElement('div');
+        warningBanner.className = 'unsaved-changes-warning';
+        warningBanner.innerHTML = `
+            <div class="unsaved-changes-content">
+                <span class="unsaved-changes-icon">⚠️</span>
+                <span class="unsaved-changes-text">変更を保存してからボットを使用してください</span>
+            </div>
+        `;
+        
+        // Insert at the beginning of profile-details-content
+        const detailsContent = detailsRow.querySelector('.profile-details-content');
+        if (detailsContent) {
+            detailsContent.insertBefore(warningBanner, detailsContent.firstChild);
+        }
+    } else if (!hasChanges && warningBanner) {
+        // Remove warning banner
+        warningBanner.remove();
+    }
+}
+
+// Initialize form change tracking
+function initializeFormChangeTracking() {
+    document.querySelectorAll('.profile-form').forEach(form => {
+        const profileName = form.getAttribute('data-profile');
+        if (profileName && profileName !== 'new') {
+            // Store original values
+            originalFormValues.set(profileName, getFormValues(form));
+            
+            // Add change listeners to all inputs
+            const inputs = form.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                const handleChange = () => {
+                    updateUnsavedChangesWarning(form);
+                };
+                
+                input.addEventListener('input', handleChange);
+                input.addEventListener('change', handleChange);
+            });
         }
     });
 }
@@ -206,6 +326,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
                 
                 if (result.success) {
+                    // Update original values after successful save
+                    originalFormValues.set(profileName, getFormValues(form));
+                    updateUnsavedChangesWarning(form);
+                    
                     showNotification('プロフィールが正常に保存されました！', 'success');
                     // Reload page after a short delay to show updated status
                     setTimeout(() => {
@@ -219,6 +343,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+    
+    // Initialize form change tracking
+    initializeFormChangeTracking();
 });
 
 // Delete profile function
@@ -526,6 +653,8 @@ function startStatusPolling() {
                     if (runSelectedBtn) {
                         runSelectedBtn.disabled = false;
                     }
+                    // Reload the page when all bots are done
+                    window.location.reload();
                 }
             }
         } catch (error) {
