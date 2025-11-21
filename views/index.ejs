@@ -110,7 +110,7 @@
                                                     </div>
                                                     <div class="form-group">
                                                         <label>予約時間:</label>
-                                                        <input type="datetime-local" name="reservation.time" value="<%= profile.config.reservation.time.replace(' ', 'T').substring(0, 16) %>" required>
+                                                        <input type="text" name="reservation.time" value="<%= profile.config.reservation.time %>" pattern="\d{4}-\d{2}-\d{2} \d{2}:\d{2}" placeholder="2025-11-21 23:32" required>
                                                     </div>
                                                     <div class="form-group">
                                                         <label>フライング時間（秒）:</label>
@@ -230,7 +230,7 @@
                     </div>
                     <div class="form-group">
                         <label>予約時間:</label>
-                        <input type="datetime-local" name="reservation.time" required>
+                        <input type="text" name="reservation.time" pattern="\d{4}-\d{2}-\d{2} \d{2}:\d{2}" placeholder="2025-11-21 23:32" required>
                     </div>
                     <div class="form-group">
                         <label>フライング時間（秒）:</label>
