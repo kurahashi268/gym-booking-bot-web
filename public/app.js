@@ -331,10 +331,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateUnsavedChangesWarning(form);
                     
                     showNotification('プロフィールが正常に保存されました！', 'success');
-                    // Reload page after a short delay to show updated status
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+                    // Refresh profile status without reloading
+                    refreshProfileStatus(profileName);
                 } else {
                     showNotification('プロフィール保存エラー: ' + result.error, 'error');
                 }
@@ -366,9 +364,21 @@ async function deleteProfile(profileName) {
         
         if (result.success) {
             showNotification('プロフィールが正常に削除されました！', 'success');
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            // Remove the profile row from the UI
+            const row = document.querySelector(`tr[data-profile="${profileName}"]`);
+            const detailsRow = document.getElementById(`details-${profileName}`);
+            if (row) row.remove();
+            if (detailsRow) detailsRow.remove();
+            // Update checkbox states
+            updateCheckboxStates();
+            // Check if no profiles left and show message
+            const remainingProfiles = document.querySelectorAll('tr[data-profile]');
+            if (remainingProfiles.length === 0) {
+                const tbody = document.querySelector('.profiles-table tbody');
+                if (tbody) {
+                    tbody.innerHTML = '';
+                }
+            }
         } else {
             showNotification('プロフィール削除エラー: ' + result.error, 'error');
         }
@@ -457,9 +467,8 @@ if (addProfileForm) {
             if (result.success) {
                 showNotification('プロフィールが正常に作成されました！', 'success');
                 closeAddProfileModal();
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                // Fetch the new profile and add it to the table
+                addProfileToTable(profileName);
             } else {
                 showNotification('プロフィール作成エラー: ' + result.error, 'error');
             }
@@ -650,11 +659,12 @@ function startStatusPolling() {
                     if (runAllBtn) {
                         runAllBtn.disabled = false;
                     }
-                    if (runSelectedBtn) {
-                        runSelectedBtn.disabled = false;
-                    }
-                    // Reload the page when all bots are done
-                    window.location.reload();
+                    // if (runSelectedBtn) {
+                    //     runSelectedBtn.disabled = false;
+                    // }
+                    // Refresh profile statuses one more time to ensure final state is displayed
+                    updateProfileStatuses(data.profiles);
+                    updateCheckboxStates();
                 }
             }
         } catch (error) {
@@ -711,13 +721,11 @@ function updateProfileStatusInfo(profile) {
         html = `
             <p><strong>ステータス:</strong> 成功</p>
             <p><strong>完了:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A'}</p>
-            <p><strong>経過時間:</strong> ${profile.status.elapsed || 'N/A'}</p>
         `;
     } else if (profile.status.status === 'failure') {
         html = `
             <p><strong>ステータス:</strong> 失敗</p>
             <p><strong>失敗:</strong> ${profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A'}</p>
-            <p><strong>経過時間:</strong> ${profile.status.elapsed || 'N/A'}</p>
             ${profile.status.message ? `<p><strong>エラー:</strong> <span class="error-text">${profile.status.message}</span></p>` : ''}
         `;
     } else {
@@ -725,6 +733,429 @@ function updateProfileStatusInfo(profile) {
     }
     
     statusInfo.innerHTML = html;
+}
+
+// Refresh a single profile's status
+async function refreshProfileStatus(profileName) {
+    try {
+        const response = await fetch(`/api/profiles/${profileName}`, {
+            headers: getAuthHeaders()
+        });
+        const result = await response.json();
+        
+        if (result.success && result.profile) {
+            // Update the status badge
+            const row = document.querySelector(`tr[data-profile="${profileName}"]`);
+            if (row) {
+                const badge = row.querySelector('.profile-status-badge');
+                if (badge) {
+                    badge.className = 'profile-status-badge';
+                    badge.classList.add(`status-${result.profile.status.status || 'inactive'}`);
+                    
+                    if (result.profile.status.status === 'running') {
+                        badge.textContent = '🟢 実行中';
+                    } else if (result.profile.status.status === 'success') {
+                        badge.textContent = '✅ 成功';
+                    } else if (result.profile.status.status === 'failure') {
+                        badge.textContent = '❌ 失敗';
+                    } else {
+                        badge.textContent = '⚪ 無効';
+                    }
+                }
+            }
+            
+            // Update status info if details row is expanded
+            const detailsRow = document.getElementById(`details-${profileName}`);
+            if (detailsRow && detailsRow.classList.contains('expanded')) {
+                updateProfileStatusInfo(result.profile);
+            }
+            
+            // Update checkbox states
+            updateCheckboxStates();
+        }
+    } catch (error) {
+        console.error('Error refreshing profile status:', error);
+    }
+}
+
+// Add a new profile to the table after creation
+async function addProfileToTable(profileName) {
+    try {
+        const response = await fetch(`/api/profiles/${profileName}`, {
+            headers: getAuthHeaders()
+        });
+        const result = await response.json();
+        
+        if (result.success && result.profile) {
+            const tbody = document.querySelector('.profiles-table tbody');
+            if (!tbody) {
+                // If table doesn't exist, show error
+                showNotification('プロフィールテーブルが見つかりません。ページを手動で更新してください。', 'error');
+                return;
+            }
+            
+            // Create and add the new rows
+            const row = createProfileRow(result.profile);
+            const detailsRow = createProfileDetailsRow(result.profile);
+            tbody.appendChild(row);
+            tbody.appendChild(detailsRow);
+            
+            // Initialize form tracking for the new profile
+            const form = detailsRow.querySelector('.profile-form');
+            if (form) {
+                const profileName = form.getAttribute('data-profile');
+                if (profileName && profileName !== 'new') {
+                    originalFormValues.set(profileName, getFormValues(form));
+                    
+                    const inputs = form.querySelectorAll('input, select, textarea');
+                    inputs.forEach(input => {
+                        const handleChange = () => {
+                            updateUnsavedChangesWarning(form);
+                        };
+                        input.addEventListener('input', handleChange);
+                        input.addEventListener('change', handleChange);
+                    });
+                }
+            }
+            
+            // Attach form submit handler
+            attachFormSubmitHandler(form);
+            
+            // Initialize selector strings
+            updateSelectorString('date', profileName);
+            updateSelectorString('location', profileName);
+            
+            // Update checkbox states
+            updateCheckboxStates();
+        }
+    } catch (error) {
+        console.error('Error adding profile to table:', error);
+        showNotification('プロフィールの追加に失敗しました', 'error');
+    }
+}
+
+// Attach form submit handler to a form element
+function attachFormSubmitHandler(form) {
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!checkAuth()) return;
+        
+        const profileName = form.getAttribute('data-profile');
+        const formData = new FormData(e.target);
+        const config = {
+            login: {
+                id: formData.get('login.id'),
+                password: formData.get('login.password')
+            },
+            reservation: {
+                time: formData.get('reservation.time').replace('T', ' '),
+                flying_time: parseFloat(formData.get('reservation.flying_time')),
+                confirm_reservation: formData.get('reservation.confirm_reservation') === 'on'
+            },
+            store: {
+                selected_store_index: parseInt(formData.get('store.selected_store_index'))
+            },
+            lesson: {
+                date_selector: {
+                    row: parseInt(formData.get('lesson.date_selector.row')) || 3,
+                    col: parseInt(formData.get('lesson.date_selector.col')) || 15,
+                    selector: formData.get('lesson.date_selector.selector')
+                },
+                location_selector: {
+                    row: parseInt(formData.get('lesson.location_selector.row')) || 3,
+                    col: parseInt(formData.get('lesson.location_selector.col')) || 6,
+                    selector: formData.get('lesson.location_selector.selector')
+                }
+            }
+        };
+        
+        try {
+            const response = await fetch(`/api/profiles/${profileName}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(config)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                originalFormValues.set(profileName, getFormValues(form));
+                updateUnsavedChangesWarning(form);
+                showNotification('プロフィールが正常に保存されました！', 'success');
+                refreshProfileStatus(profileName);
+            } else {
+                showNotification('プロフィール保存エラー: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showNotification('エラー: ' + error.message, 'error');
+        }
+    });
+}
+
+// Refresh the entire profiles list (fallback function, not currently used)
+async function refreshProfilesList() {
+    try {
+        const response = await fetch('/api/profiles', {
+            headers: getAuthHeaders()
+        });
+        const result = await response.json();
+        
+        if (result.success && result.profiles) {
+            const tbody = document.querySelector('.profiles-table tbody');
+            if (!tbody) {
+                // If table doesn't exist, show error
+                showNotification('プロフィールテーブルが見つかりません。ページを手動で更新してください。', 'error');
+                return;
+            }
+            
+            // Clear existing rows
+            tbody.innerHTML = '';
+            
+            // Add new rows for each profile
+            result.profiles.forEach(profile => {
+                const row = createProfileRow(profile);
+                const detailsRow = createProfileDetailsRow(profile);
+                tbody.appendChild(row);
+                tbody.appendChild(detailsRow);
+            });
+            
+            // Re-initialize form tracking and other handlers
+            initializeFormChangeTracking();
+            initializeSelectorInputs();
+            updateCheckboxStates();
+            
+            // Re-attach form submit handlers
+            document.querySelectorAll('.profile-form').forEach(form => {
+                // Remove existing listener if any, then add new one
+                const newForm = form.cloneNode(true);
+                form.parentNode.replaceChild(newForm, form);
+                
+                newForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    if (!checkAuth()) return;
+                    
+                    const profileName = newForm.getAttribute('data-profile');
+                    const formData = new FormData(e.target);
+                    const config = {
+                        login: {
+                            id: formData.get('login.id'),
+                            password: formData.get('login.password')
+                        },
+                        reservation: {
+                            time: formData.get('reservation.time').replace('T', ' '),
+                            flying_time: parseFloat(formData.get('reservation.flying_time')),
+                            confirm_reservation: formData.get('reservation.confirm_reservation') === 'on'
+                        },
+                        store: {
+                            selected_store_index: parseInt(formData.get('store.selected_store_index'))
+                        },
+                        lesson: {
+                            date_selector: {
+                                row: parseInt(formData.get('lesson.date_selector.row')) || 3,
+                                col: parseInt(formData.get('lesson.date_selector.col')) || 15,
+                                selector: formData.get('lesson.date_selector.selector')
+                            },
+                            location_selector: {
+                                row: parseInt(formData.get('lesson.location_selector.row')) || 3,
+                                col: parseInt(formData.get('lesson.location_selector.col')) || 6,
+                                selector: formData.get('lesson.location_selector.selector')
+                            }
+                        }
+                    };
+                    
+                    try {
+                        const response = await fetch(`/api/profiles/${profileName}`, {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify(config)
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            originalFormValues.set(profileName, getFormValues(newForm));
+                            updateUnsavedChangesWarning(newForm);
+                            showNotification('プロフィールが正常に保存されました！', 'success');
+                            refreshProfileStatus(profileName);
+                        } else {
+                            showNotification('プロフィール保存エラー: ' + result.error, 'error');
+                        }
+                    } catch (error) {
+                        showNotification('エラー: ' + error.message, 'error');
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        console.error('Error refreshing profiles list:', error);
+        showNotification('プロフィールリストの更新に失敗しました', 'error');
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Create a profile row element
+function createProfileRow(profile) {
+    const row = document.createElement('tr');
+    row.setAttribute('data-profile', profile.name);
+    
+    const statusText = profile.status.status === 'running' ? '🟢 実行中' :
+                       profile.status.status === 'success' ? '✅ 成功' :
+                       profile.status.status === 'failure' ? '❌ 失敗' : '⚪ 無効';
+    
+    const escapedName = escapeHtml(profile.name);
+    row.innerHTML = `
+        <td class="profile-checkbox-cell">
+            <input type="checkbox" class="profile-checkbox" value="${escapedName}" onchange="updateRunButtonState()">
+        </td>
+        <td class="profile-name-cell">${escapedName}</td>
+        <td class="profile-status-cell">
+            <span class="profile-status-badge status-${profile.status.status || 'inactive'}">
+                ${statusText}
+            </span>
+        </td>
+        <td class="profile-actions-cell">
+            <button class="profile-expand-btn" onclick="toggleProfileDetails('${escapedName}')" data-profile="${escapedName}">
+                <span class="expand-icon">▼</span>
+                <span>詳細</span>
+            </button>
+        </td>
+    `;
+    
+    return row;
+}
+
+// Create a profile details row element
+function createProfileDetailsRow(profile) {
+    const row = document.createElement('tr');
+    row.className = 'profile-details-row';
+    const escapedName = escapeHtml(profile.name);
+    row.id = `details-${escapedName}`;
+    row.setAttribute('data-profile', escapedName);
+    
+    const timestamp = profile.status.timestamp ? escapeHtml(new Date(profile.status.timestamp).toLocaleString('ja-JP')) : 'N/A';
+    const elapsed = escapeHtml(String(profile.status.elapsed || 'N/A'));
+    const errorMessage = profile.status.message ? escapeHtml(profile.status.message) : '';
+    
+    const statusHtml = profile.status.status === 'running' ? 
+        `<p><strong>ステータス:</strong> ${timestamp} から実行中</p>` :
+        profile.status.status === 'success' ?
+        `<p><strong>ステータス:</strong> 成功</p>
+         <p><strong>完了:</strong> ${timestamp}</p>` :
+        profile.status.status === 'failure' ?
+        `<p><strong>ステータス:</strong> 失敗</p>
+         <p><strong>失敗:</strong> ${timestamp}</p>
+         ${errorMessage ? `<p><strong>エラー:</strong> <span class="error-text">${errorMessage}</span></p>` : ''}` :
+        `<p><strong>ステータス:</strong> 無効</p>`;
+    
+    const confirmChecked = profile.config.reservation.confirm_reservation ? 'checked' : '';
+    
+    row.innerHTML = `
+        <td colspan="4" class="profile-details-cell">
+            <div class="profile-details-content">
+                <div class="profile-status-info">
+                    ${statusHtml}
+                </div>
+                
+                <form class="profile-form" data-profile="${escapedName}">
+                    <div class="form-group">
+                        <label>ログインID:</label>
+                        <input type="text" name="login.id" value="${escapeHtml(profile.config.login.id || '')}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>パスワード:</label>
+                        <input type="text" name="login.password" value="${escapeHtml(profile.config.login.password || '')}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>予約時間:</label>
+                        <input type="text" name="reservation.time" value="${escapeHtml(profile.config.reservation.time || '')}" pattern="\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}" placeholder="2025-11-21 23:32" required>
+                    </div>
+                    <div class="form-group">
+                        <label>フライング時間（秒）:</label>
+                        <input type="number" name="reservation.flying_time" value="${escapeHtml(String(profile.config.reservation.flying_time || ''))}" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>予約を確認:</label>
+                        <input type="checkbox" name="reservation.confirm_reservation" ${confirmChecked}>
+                    </div>
+                    <div class="form-group">
+                        <label>店舗インデックス:</label>
+                        <input type="number" name="store.selected_store_index" value="${escapeHtml(String(profile.config.store.selected_store_index || ''))}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>レッスン日付セレクター:</label>
+                        <div class="selector-input-group">
+                            <div class="selector-numbers">
+                                <label class="selector-number-label">日付行:</label>
+                                <input type="number" class="selector-number-input" 
+                                       name="lesson.date_selector.row"
+                                       data-selector-type="date" 
+                                       data-selector-index="0" 
+                                       data-profile="${escapedName}"
+                                       value="${profile.config.lesson.date_selector.row || 3}" 
+                                       min="1" required>
+                                <label class="selector-number-label">日付列:</label>
+                                <input type="number" class="selector-number-input" 
+                                        name="lesson.date_selector.col"
+                                        data-selector-type="date" 
+                                        data-selector-index="1" 
+                                        data-profile="${escapedName}"
+                                        value="${profile.config.lesson.date_selector.col || 15}" 
+                                        min="1" required>
+                            </div>
+                            <input type="text" class="selector-string-display" 
+                                name="lesson.date_selector.selector"
+                                   data-selector-type="date"
+                                   data-profile="${escapedName}"
+                                   value="${escapeHtml(profile.config.lesson.date_selector.selector || '')}" 
+                                   readonly>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>レッスン場所セレクター:</label>
+                        <div class="selector-input-group">
+                            <div class="selector-numbers">
+                                <label class="selector-number-label">行インデックス:</label>
+                                <input type="number" class="selector-number-input" 
+                                       name="lesson.location_selector.row" 
+                                       data-selector-type="location" 
+                                       data-selector-index="0"
+                                       data-profile="${escapedName}"
+                                       value="${profile.config.lesson.location_selector.row || 3}" 
+                                       min="1" required>
+                                <label class="selector-number-label">列インデックス:</label>
+                                <input type="number" class="selector-number-input" 
+                                        name="lesson.location_selector.col" 
+                                        data-selector-type="location" 
+                                        data-selector-index="1"
+                                        data-profile="${escapedName}"
+                                        value="${profile.config.lesson.location_selector.col || 6}" 
+                                        min="1" required>
+                            </div>
+                            <input type="text" class="selector-string-display" 
+                                    name="lesson.location_selector.selector"
+                                   data-selector-type="location"
+                                   data-profile="${escapedName}"
+                                   value="${escapeHtml(profile.config.lesson.location_selector.selector || '')}" 
+                                   readonly>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">プロフィールを保存</button>
+                        <button type="button" class="btn btn-danger" onclick="deleteProfile('${escapedName}')">プロフィールを削除</button>
+                    </div>
+                </form>
+            </div>
+        </td>
+    `;
+    
+    return row;
 }
 
 // Auto-start polling if any bot is running

@@ -7,6 +7,14 @@
     <link rel="stylesheet" href="/public/style.css">
 </head>
 <body>
+    <div class="floating-circles">
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+    </div>
     <div class="container">
         <header>
             <h1>🤖 リトモス予約ボット コントローラー</h1>
@@ -34,7 +42,7 @@
                         <div style="display: flex; gap: 12px;">
                             <button id="addProfileBtn" class="btn btn-primary">+ プロフィールを追加</button>
                             <button id="runSelectedBtn" class="btn btn-success">▶ 選択したボットを実行</button>
-                            <button id="runAllBtn" class="btn btn-success" style="opacity: 0.7;">▶ すべてのボットを実行</button>
+                            <!-- <button id="runAllBtn" class="btn btn-success">▶ すべてのボットを実行</button> -->
                         </div>
                     </div>
                     
@@ -86,11 +94,9 @@
                                                     <% } else if (profile.status.status === 'success') { %>
                                                         <p><strong>ステータス:</strong> 成功</p>
                                                         <p><strong>完了:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A' %></p>
-                                                        <p><strong>経過時間:</strong> <%= profile.status.elapsed || 'N/A' %></p>
                                                     <% } else if (profile.status.status === 'failure') { %>
                                                         <p><strong>ステータス:</strong> 失敗</p>
                                                         <p><strong>失敗:</strong> <%= profile.status.timestamp ? new Date(profile.status.timestamp).toLocaleString('ja-JP') : 'N/A' %></p>
-                                                        <p><strong>経過時間:</strong> <%= profile.status.elapsed || 'N/A' %></p>
                                                         <% if (profile.status.message) { %>
                                                             <p><strong>エラー:</strong> <span class="error-text"><%= profile.status.message %></span></p>
                                                         <% } %>
@@ -109,8 +115,8 @@
                                                         <input type="text" name="login.password" value="<%= profile.config.login.password %>" required>
                                                     </div>
                                                     <div class="form-group">
-                                                        <label>予約時間:</label>
-                                                        <input type="text" name="reservation.time" value="<%= profile.config.reservation.time %>" pattern="\d{4}-\d{2}-\d{2} \d{2}:\d{2}" placeholder="2025-11-21 23:32" required>
+                                                        <label>予約時間: (例: 2025/03/05 08:00)</label>
+                                                        <input type="text" name="reservation.time" value="<%= profile.config.reservation.time %>" pattern="\d{4}/\d{2}/\d{2} \d{2}:\d{2}" placeholder="2025/11/21 23:32" required>
                                                     </div>
                                                     <div class="form-group">
                                                         <label>フライング時間（秒）:</label>
@@ -230,7 +236,7 @@
                     </div>
                     <div class="form-group">
                         <label>予約時間:</label>
-                        <input type="text" name="reservation.time" pattern="\d{4}-\d{2}-\d{2} \d{2}:\d{2}" placeholder="2025-11-21 23:32" required>
+                        <input type="text" name="reservation.time" pattern="\d{4}/\d{2}/\d{2} \d{2}:\d{2}" placeholder="2025/11/21 23:32" required>
                     </div>
                     <div class="form-group">
                         <label>フライング時間（秒）:</label>

@@ -85,19 +85,19 @@ async function route_loginPage(request, reply) {
 async function route_attemptLogin(request, reply) {
   const {password} = request.body;
   if(!password) {
-    return reply.status(400).send({ success: false, error: 'Password is required'});
+    return reply.status(400).send({ success: false, error: 'パスワードは必須です'});
   }
 
   const isValid = await verifyPassword(password);
 
   if(!isValid) {
-    return reply.status(401).send({ success: false, error: 'Invalid password'});
+    return reply.status(401).send({ success: false, error: 'パスワードが正しくありません'});
   }
 
   const {authToken, expiresAt} = generateAuthToken();
   const success = await updateAuthToken(authToken, expiresAt);
   if(!success) {
-    return reply.status(500).send({ success: false, error: 'Failed to update auth token'});
+    return reply.status(500).send({ success: false, error: '認証トークンの更新に失敗しました'});
   }
   return { success: true, token: authToken };
 }
@@ -105,15 +105,15 @@ async function route_attemptLogin(request, reply) {
 async function route_updatePassword(request, reply) {
   const {oldPassword, newPassword} = request.body;
   if(!oldPassword || !newPassword) {
-    return reply.status(400).send({ success: false, error: 'Old password and new password are required'});
+    return reply.status(400).send({ success: false, error: '現在のパスワードと新しいパスワードは必須です'});
   }
 
   const isValid = await verifyPassword(oldPassword);
-  if(!isValid) return reply.status(401).send({ success: false, error: 'Invalid old password'});
+  if(!isValid) return reply.status(401).send({ success: false, error: '現在のパスワードが正しくありません'});
 
   const success = await updatePassword(newPassword);
   if(!success) {
-    return reply.status(500).send({ success: false, error: 'Failed to update password'});
+    return reply.status(500).send({ success: false, error: 'パスワードの更新に失敗しました'});
   }
 
   return { success: true };
@@ -137,7 +137,7 @@ async function route_getProfile(request, reply) {
   const config = await getProfile(profileName);
 
   if(!config) {
-    return reply.status(404).send({ success: false, error: 'Profile not found'});
+    return reply.status(404).send({ success: false, error: 'プロファイルが見つかりません'});
   }
 
   const status = await readProfileStatus(profileName);
@@ -156,27 +156,27 @@ async function route_updateProfile(request, reply) {
   const newConfig = request.body;
 
   if(!profileNameValidator(profileName)) {
-    return reply.status(400).send({ success: false, error: 'Invalid profile name. Use only letters, numbers, underscores, and hyphens.'});
+    return reply.status(400).send({ success: false, error: 'プロファイル名が無効です。英字、数字、アンダースコア、ハイフンのみ使用できます。'});
   }
 
   if(!profileConfigValidator(newConfig)) {
-    return reply.status(400).send({ success: false, error: 'Invalid profile configuration'});
+    return reply.status(400).send({ success: false, error: 'プロファイル設定が無効です'});
   }
 
   // Check if we are at max profiles (only for new profiles)
   const existingProfiles = await listProfiles();
   const isNew = !existingProfiles.includes(profileName);
-  if(isNew && existingProfiles.length >= MAX_PROFILE) {
-    return reply.status(400).send({ success: false, error: `Max number of profiles (${MAX_PROFILE}) reached. Delete a profile to add a new one.`});
-  }
+  // if(isNew && existingProfiles.length >= MAX_PROFILE) {
+  //   return reply.status(400).send({ success: false, error: `Max number of profiles (${MAX_PROFILE}) reached. Delete a profile to add a new one.`});
+  // }
 
   // Save profile
   const success = await saveProfile(profileName, newConfig);
   if(!success) {
-    return reply.status(500).send({ success: false, error: 'Failed to save profile'});
+    return reply.status(500).send({ success: false, error: 'プロファイルの保存に失敗しました'});
   }
 
-  return { success: true, message: 'Profile saved successfully'};
+  return { success: true, message: 'プロファイルを正常に保存しました'};
 }
 
 async function route_deleteProfile(request, reply) {
@@ -186,10 +186,10 @@ async function route_deleteProfile(request, reply) {
   const {profileName} = request.params;
   const success = await deleteProfile(profileName);
   if(!success) {
-    return reply.status(500).send({ success: false, error: 'Failed to delete profile'});
+    return reply.status(500).send({ success: false, error: 'プロファイルの削除に失敗しました'});
   }
 
-  return { success: true, message: 'Profile deleted successfully'};
+  return { success: true, message: 'プロファイルを正常に削除しました'};
 }
 
 async function route_runSelected(request, reply) {
@@ -198,16 +198,21 @@ async function route_runSelected(request, reply) {
 
   const {profiles: selectedProfiles} = request.body;
   if(!Array.isArray(selectedProfiles) || selectedProfiles.length === 0) {
-    return reply.status(400).send({ success: false, error: 'Selected profiles array is required'});
+    return reply.status(400).send({ success: false, error: '選択されたプロファイルの配列が必要です'});
   }
 
   // The following profiles will be ignored
   // 1. Profiles that are already running
   // 2. Profiles that don't exist
 
+  //
+  if(selectedProfiles.length >= MAX_PROFILE) {
+    return reply.status(400).send({ success: false, error: `プロファイルの最大数（${MAX_PROFILE}）に達しました。新しいプロファイルを追加するには、1つのプロファイルを削除してください。`});
+  }
+
   // Run bot for each selected profile
   const results = await Promise.all(selectedProfiles.map(async profile => await runBotForProfile(profile)));
-  return { success: true, message: 'Bot started for selected profiles', profiles: selectedProfiles };
+  return { success: true, message: '選択されたプロファイルでボットを開始しました', profiles: selectedProfiles };
 }
 
 async function route_runAll(request, reply) {
@@ -217,12 +222,12 @@ async function route_runAll(request, reply) {
   const profiles = await listProfiles();
 
   if(profiles.length === 0) {
-    return reply.status(400).send({success: false, error: 'No profiles found'});
+    return reply.status(400).send({success: false, error: 'プロファイルが見つかりません'});
   }
 
   // Run bot for each profile
   const results = await Promise.all(profiles.map(async profile => await runBotForProfile(profile)));
-  return { success: true, message: 'Bot started for all profiles', profiles: profiles };
+  return { success: true, message: 'すべてのプロファイルでボットを開始しました', profiles: profiles };
 }
 
 async function route_getProfileStatus(request, reply) {
@@ -259,7 +264,7 @@ async function requireAuth(request, reply) {
 
   if(!token || !(await checkAuthToken(token))) {
     if(checkAjax(request)) {
-      return reply.status(401).send({error: 'Unauthorized'});
+      return reply.status(401).send({error: '認証されていません'});
     }
     return reply.redirect('/login');
   }
@@ -272,7 +277,7 @@ async function requireGuest(request, reply, redirectTo='/') {
   const token = await authToken(request);
   if(token && await checkAuthToken(token)) {
     if(checkAjax(request)) {
-      return reply.status(401).send({error: 'Unauthorized'});
+      return reply.status(401).send({error: '認証されていません'});
     }
     return reply.redirect(redirectTo);
   }
@@ -527,14 +532,14 @@ async function readProfileStatus(profileName) {
     const content = await fs.readFile(statusPath, 'utf8');
     const parsed = parseProfileStatus(content);
 
-    if(parsed.status === 'running' && parsed.timestamp) {
-      const timestampDate = new Date(parsed.timestamp);
-      const now = new Date();
-      const passedSeconds = (now - timestampDate) / 1000;
-      if(passedSeconds > BOT_ESTIMATED_ELAPSED_SECONDS) {
-        parsed.status = 'inactive';
-      }
-    }
+    // if(parsed.status === 'running' && parsed.timestamp) {
+    //   const timestampDate = new Date(parsed.timestamp);
+    //   const now = new Date();
+    //   const passedSeconds = (now - timestampDate) / 1000;
+    //   if(passedSeconds > BOT_ESTIMATED_ELAPSED_SECONDS) {
+    //     parsed.status = 'inactive';
+    //   }
+    // }
     return parsed;
   } catch (error) {
     console.error('{Error reading profile status} ', error);
